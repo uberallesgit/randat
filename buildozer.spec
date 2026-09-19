@@ -29,7 +29,7 @@ version = 1.0
 
 # (list) Application requirements
 # !!! ЭТА СТРОКА ИСПРАВЛЕНА !!!
-requirements = requirements = python3,kivy==2.3.1,kivymd==1.1.1,pillow,openpyxl,et-xmlfile,cython==3.0.11
+requirements = python3,kivy==2.3.1,kivymd==1.1.1,pillow,openpyxl,et-xmlfile,cython==3.0.11
 
 # (str) Supported orientations
 orientation = portrait
@@ -42,7 +42,7 @@ android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
 # (int) Android API to use
 # !!! ЭТА СТРОКА ИСПРАВЛЕНА !!!
-android.api = 36
+android.api = 33
 
 # (int) Minimum API required
 android.minapi = 21
