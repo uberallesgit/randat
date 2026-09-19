@@ -1,0 +1,12 @@
+﻿.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.spec
+.idea/
+.buildozer/
+bin/
+dist/
+build/
+backup/
+.kivy/

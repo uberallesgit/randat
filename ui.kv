@@ -1,0 +1,561 @@
+#:import MDTopAppBar kivymd.uix.toolbar.MDTopAppBar
+# ────────────────────────────────────────────────────────────────
+# GOORANDA
+# ────────────────────────────────────────────────────────────────
+<GoorandaWindow>:
+    name: "Gooranda"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Gooranda Mode"
+            elevation: 3
+            left_action_items: [["arrow-up-bold", lambda x: app.go_to("SettingsWindow")],["radio-tower", lambda x: app.go_to("TorusWindow")]]
+            right_action_items: [["swap-horizontal", lambda x: app.go_to("Uber")]]
+
+        MDBoxLayout:
+            orientation: "vertical"
+            padding: "12dp"
+            spacing: "12dp"
+
+            MDCard:
+                orientation: "vertical"
+                padding: "8dp"
+                size_hint_y: 0.55
+                elevation: 2
+                radius: [12, ]
+
+                TextInput:
+                    id: output_text
+                    text: ""
+                    markup: True
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "15sp"
+
+            MDBoxLayout:
+                size_hint_y: None
+                height: "48dp"
+                spacing: "10dp"
+
+                MDRaisedButton:
+                    text: "КОПИРОВАТЬ"
+                    disabled: output_text.text == ""
+                    on_release: root.copy_to_clipboard(output_text.text)
+
+                MDRaisedButton:
+                    text: "НАВИГАТОР"
+                    md_bg_color: app.theme_cls.accent_color
+                    #disabled: root.route is None
+                    disabled: output_text.text == ''
+                    on_release: root.open_browser(root.route)
+
+            MDBoxLayout:
+                size_hint_y: None
+                height: "56dp"
+                spacing: "8dp"
+
+                MDDropDownItem:
+                    id: spinner_id
+                    text: "БС"
+                    on_release: app.open_mode_menu(spinner_id)
+
+                MDTextField:
+                    id: bs_name
+                    hint_text: "Номер БС / ARC"
+                    mode: "rectangle"
+                    text_validate_unfocus: False
+                    on_text_validate: root.make_output()
+
+                MDRaisedButton:
+                    text: "GO"
+                    size_hint_x: None
+                    width: "80dp"
+                    on_release: root.make_output()
+
+
+# ─────────────────────────────────────────────────
+# WORKER
+# ─────────────────────────────────────────────────
+<WorkerWindow>:
+    name: "WorkerWindow"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Выбор сотрудников"
+            elevation: 3
+            left_action_items: [["arrow-left", lambda x: app.go_back("Uber")]]
+
+        MDScrollView:
+            MDList:
+                id: checkbox_container
+
+
+# ────────────────────────────────────────────────────────────────
+# RESPONSIBLES
+# ────────────────────────────────────────────────────────────────
+<ResponsiblesWindow>:
+    name: "Responsibles"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Ответственный за заявку"
+            elevation: 3
+            left_action_items: [["arrow-left", lambda x: app.go_back("Uber")]]
+
+        MDScrollView:
+            MDList:
+                id: respons_checkbox_container
+
+
+# ────────────────────────────────────────────────────────────────
+# CRWO
+# ────────────────────────────────────────────────────────────────
+<CrwoWindow>:
+    name: "CrwoWindow"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Готовая заявка"
+            elevation: 3
+            left_action_items: [["arrow-left", lambda x: app.go_back("Uber")]]
+
+        MDBoxLayout:
+            orientation: "vertical"
+            padding: "12dp"
+            spacing: "12dp"
+
+            MDCard:
+                padding: "8dp"
+                size_hint_y: 0.85
+                elevation: 2
+                radius: [12, ]
+
+                TextInput:
+                    id: crwo_text_output
+                    text: ""
+                    #disabled: True
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "15sp"
+
+            MDBoxLayout:
+                size_hint_y: None
+                height: "48dp"
+                spacing: "10dp"
+
+                MDRaisedButton:
+                    text: "КОПИРОВАТЬ"
+                    on_release: root.copy_to_clipboard(crwo_text_output.text)
+
+                MDRaisedButton:
+                    text: "НАЗАД"
+                    md_bg_color: app.theme_cls.accent_color
+                    on_release: app.go_back("Uber")
+
+
+# ────────────────────────────────────────────────────────────────
+# UBER — главный экран
+# ────────────────────────────────────────────────────────────────
+<UberWindow>:
+    name: "Uber"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Uber Mode"
+            elevation: 3
+            left_action_items: [["swap-horizontal", lambda x: app.go_back("Gooranda")]]
+
+        MDScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "12dp"
+                spacing: "10dp"
+                size_hint_y: None
+                height: self.minimum_height
+
+                # ── Номер CRWO ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: "56dp"
+                    spacing: "6dp"
+
+                    MDRaisedButton:
+                        text: "-1"
+                        size_hint_x: None
+                        width: "60dp"
+                        on_release: root.crwo_decrement(root.ids.crwo_number.text)
+
+                    MDTextField:
+                        id: crwo_number
+                        hint_text: "Номер CRWO"
+                        mode: "rectangle"
+
+                    MDRaisedButton:
+                        text: "+1"
+                        size_hint_x: None
+                        width: "60dp"
+                        on_release: root.crwo_increment(root.ids.crwo_number.text)
+
+                # ── Trouble Ticket ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: "56dp"
+                    spacing: "6dp"
+
+                    MDDropDownItem:
+                        id: tt_spinner
+                        text: "TT"
+                        size_hint_x: None
+                        width: "100dp"
+                        on_release: app.open_tt_menu(tt_spinner)
+
+                    MDTextField:
+                        id: tt_number
+                        hint_text: "Номер ТТ"
+                        mode: "rectangle"
+
+                    MDFlatButton:
+                        text: "Очистить"
+                        size_hint_x: None
+                        width: "100dp"
+                        on_release: root.clear_tt_number()
+
+                # ── БС ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: "56dp"
+                    spacing: "6dp"
+                    MDDropDownItem:
+                        id: moto_spinner
+                        text: "БС"
+                        size_hint_x: None
+                        width: "100dp"
+                        on_release: app.open_moto_menu(moto_spinner)
+                    MDTextField:
+                        id: bs_name
+                        hint_text: "Номер БС"
+                        mode: "rectangle"
+                    MDFlatButton:
+                        text: "Очистить"
+                        size_hint_x: None
+                        width: "100dp"
+                        on_release: root.clear_bs_name()
+
+                # ── Регион / Организация / ──
+                MDBoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: "56dp"
+                    spacing: "6dp"
+                    MDDropDownItem:
+                        id: region_short
+                        text: "FEO"
+                        on_release: app.open_region_menu(region_short)
+                        pos_hint: {"center_x": .5}
+                    MDDropDownItem:
+                        id: organization
+                        text: "Миранда-Медиа"
+                        pos_hint: {"center_x": .5}
+                        on_release: app.open_organization_menu(organization)
+
+                MDBoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    #height: "40dp"
+                    spacing: "6dp"
+                    MDDropDownItem:
+                        id: work_type
+                        text: "🔋 ДГУ"
+                        on_release: app.open_work_type_menu(work_type)
+
+                    MDTextField:
+                        id: work_description
+                        hint_text: "Описание работ"
+                        mode: "rectangle"
+                        multiline: True
+                        #size_hint_y: None
+                        height: "100dp"
+
+                    MDFlatButton:
+                        text: "Очистить"
+                        size_hint_x: None
+                        width: "100dp"
+                        on_release: root.clear_description()
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: "56dp"
+                    spacing: "6dp"
+
+                    MDDropDownItem:
+                        id: work_description_spinner
+                        text: "🪫 Запитать БС от ДГУ"
+                        on_release: app.open_work_desc_menu(work_description_spinner)
+
+                    MDDropDownItem:
+                        id: time_to_go_spinner
+                        text: "Назначить время"
+                        on_release: app.open_time_menu(time_to_go_spinner)
+
+                MDBoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: "48dp"
+                    spacing: "6dp"
+                    MDLabel:
+                        id: choose_workers_label
+                        text: "Выбери исполнителей: "
+                        font_style: "Body1"
+                        pos_hint: {"center_y": .5}
+                        valign: "middle"
+
+                # ── Кто поедет / Время ──
+                MDBoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: "56dp"
+                    spacing: "6dp"
+
+                    MDRaisedButton:
+                        #id: choose_workers_button
+                        text: "Выбрать сотрудников"
+                        pos_hint: {"center_y": .5}
+                        on_release: app.go_to("WorkerWindow")
+
+                     # ── Чекбокс "Единой заявкой" ──
+
+                    MDBoxLayout:
+                        id: single_request_box
+                        size_hint_y: None
+                        height: "30dp"
+                        spacing: "8dp"
+
+                        MDCheckbox:
+                            id: single_request_checkbox
+                            size_hint: None, None
+                            size: "30dp", "30dp"
+                            active: False if self.disabled else self.active
+
+                        MDLabel:
+                            text: "Единой заявкой"
+                            font_style: "Body1"
+                            # Переключаем тему в зависимоти от состояния самого лейбла:
+                            theme_text_color: "Hint" if self.disabled else "Primary"
+                            valign: "middle"
+
+                # ── Ответственный ──
+                MDTextField:
+                    id: respo_worker
+                    hint_text: "Выдал заявку (Фамилия)"
+                    mode: "rectangle"
+                    size_hint_y: None
+                    height: "56dp"
+                    on_text_validate: root.write_responsible_worker(respo_worker.text)
+
+
+
+        # ── Кнопка формирования ──
+        FloatLayout:
+            anchor_x: 'center'
+            anchor_y: 'center'
+            size_hint: 1, None
+            height: "80dp"
+
+            MDRaisedButton:
+                text: "СФОРМИРОВАТЬ ЗАЯВКУ"
+                size_hint: None, .8
+                size: "250dp", "100dp"
+                pos_hint: {"center_x": 0.5, "y": 0.15}
+                md_bg_color: 0.18, 0.80, 0.44, 1
+                on_release:
+                    root.write_crwo_list(crwo_number.text)
+                    app.go_to("CrwoWindow")
+                    root.start()
+
+
+# ────────────────────────────────────────────────────────────────
+# SETTINGS
+# ────────────────────────────────────────────────────────────────
+<SettingsWindow>:
+    name: "SettingsWindow"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Настройки: обновление БД"
+            elevation: 3
+            left_action_items: [["arrow-left", lambda x: app.go_back("Gooranda")]]
+
+        MDBoxLayout:
+            orientation: "vertical"
+            padding: "16dp"
+            spacing: "16dp"
+
+            MDLabel:
+                text: "Выберите файл Excel (.xls, .xlsx, .csv) для обновления базы данных."
+                halign: "center"
+                size_hint_y: None
+                height: "60dp"
+
+            MDRaisedButton:
+                text: "ВЫБРАТЬ ФАЙЛ"
+                pos_hint: {"center_x": 0.5}
+                on_release: root.open_file_manager()
+
+
+# ────────────────────────────────────────────────────────────────
+# TORUS
+# ────────────────────────────────────────────────────────────────
+<TorusWindow>:
+    name: "TorusWindow"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Torus: выбор документа"
+            elevation: 3
+            left_action_items: [["arrow-left", lambda x: app.go_back("Gooranda")]]
+
+        MDBoxLayout:
+            orientation: "vertical"
+            padding: "16dp"
+            spacing: "16dp"
+
+            MDLabel:
+                text: "Выберите регион и документ Torus (.xls, .xlsx, .csv)"
+                halign: "center"
+                size_hint_y: None
+                height: "40dp"
+
+            MDDropDownItem:
+                id: dropdown_region
+                text: "FEO"
+                pos_hint: {"center_x": 0.5}
+                on_release: app.open_region_menu(self)
+
+            MDRaisedButton:
+                id: torus_again
+                text: "AGAIN"
+                pos_hint: {"center_x": 0.5}
+                on_release: root.torus_again
+
+            MDRaisedButton:
+                text: "ВЫБРАТЬ ФАЙЛ"
+                pos_hint: {"center_x": 0.5}
+                on_release: root.open_file_manager()
+
+
+# ────────────────────────────────────────────────────────────────
+# NETWORK TABS
+# ────────────────────────────────────────────────────────────────
+<NetworkTabsWindow>:
+    name: "NetworkTabsWindow"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            id:app_bar
+            title: "Torus: результаты"
+            elevation: 3
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+
+        MDTabs:
+            id: tabs
+
+            MyTab:
+                title: "GSM/DCS"
+
+                TextInput:
+                    id:gsm
+                    text: ""
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "16sp"
+
+            MyTab:
+                title: "UMTS"
+
+                TextInput:
+                    id: umts
+                    text: ""
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "16sp"
+
+            MyTab:
+                title: "LTE"
+
+                TextInput:
+                    id: lte
+                    text: ""
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "16sp"
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "56dp"
+            spacing: "8dp"
+            padding: "8dp"
+
+            MDRaisedButton:
+                text: "НАЗАД"
+                on_release: root.go_back()
+
+            MDRaisedButton:
+                text: "КОПИРОВАТЬ"
+                md_bg_color: app.theme_cls.accent_color
+                on_release: root.copy_current_tab()
+
+            MDRaisedButton:
+                text: "ОТМЕНА"
+                md_bg_color: 0.9, 0.3, 0.3, 1
+                on_release: root.go_cancel()
+
+
+<MyTab>
+    orientation: "vertical"
+
+
+# ────────────────────────────────────────────────────────────────
+# ЧЕКБОКС-ЭЛЕМЕНТ ДЛЯ СПИСКА
+# ────────────────────────────────────────────────────────────────
+<CheckboxItem>:
+    theme_text_color: "Primary"

@@ -1,0 +1,943 @@
+import os
+import pandas as pd
+import sys
+import pickle
+import webbrowser
+from datetime import datetime, timedelta
+import openpyxl
+from kivy.lang import Builder
+from kivy.core.clipboard import Clipboard
+from kivy.properties import StringProperty, ListProperty, BooleanProperty
+from kivy.metrics import dp
+from kivymd.app import MDApp
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.screenmanager import MDScreenManager
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton, MDRaisedButton
+from kivymd.uix.selectioncontrol import MDCheckbox
+from kivymd.uix.menu import MDDropdownMenu
+from kivymd.uix.tab import MDTabsBase
+from kivymd.uix.list import ILeftBodyTouch, OneLineAvatarIconListItem
+from kivymd.uix.toolbar import MDTopAppBar  # noqa
+from kivy.properties import BooleanProperty
+from kivymd.uix.dropdownitem import MDDropDownItem
+
+class MyTab(MDBoxLayout, MDTabsBase):
+    """Класс для вкладки MDTabs."""
+    pass
+
+
+class LeftCheckbox(ILeftBodyTouch, MDCheckbox):
+    """Чекбокс для левой части ListItem."""
+    pass
+
+
+class CheckboxItem(OneLineAvatarIconListItem):
+    """Строка списка с MDCheckbox слева."""
+
+    def __init__(self, worker_name, callback, **kwargs):
+        super().__init__(**kwargs)
+        self.text = worker_name
+        self._callback = callback
+
+        cb = LeftCheckbox(
+            size_hint=(None, None),
+            size=(dp(48), dp(48)),
+        )
+        cb.bind(active=lambda inst, val: self._callback(inst, val, worker_name))
+        self.add_widget(cb)
+
+# ────────────────────────────────────────────────────────────────
+# Пути к ресурсам (учитываем PyInstaller)
+# ────────────────────────────────────────────────────────────────
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+
+def service_path(filename):
+    """Файлы service/ пишутся рядом с .exe / main.py — НЕ в _MEIPASS."""
+    if getattr(sys, 'frozen', False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    service_dir = os.path.join(base, 'service')
+    os.makedirs(service_dir, exist_ok=True)
+    return os.path.join(service_dir, filename)
+
+
+
+# ────────────────────────────────────────────────────────────────
+# GOORANDA — поиск БС / ARC / маршрутов
+# ────────────────────────────────────────────────────────────────
+class GoorandaWindow(MDScreen):
+    route = None
+
+    try:
+        with open(resource_path('RDB.pickle'), "rb") as f:
+            RDB = pickle.load(f)
+    except FileNotFoundError:
+        RDB = {}
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.dialog = None
+
+    # ── UI-хелперы ──
+    def copy_to_clipboard(self, string):
+        if string:
+            Clipboard.copy(string)
+
+    def open_browser(self, route):
+        if route:
+            webbrowser.open(route)
+
+    def show_dialog(self, text, title="Внимание"):
+        if not self.dialog:
+            self.dialog = MDDialog(
+                title=title,
+                text=text,
+                buttons=[MDFlatButton(text="OK",
+                                      on_release=lambda x: self.dialog.dismiss())],
+            )
+        else:
+            self.dialog.title = title
+            self.dialog.text = text
+        self.dialog.open()
+
+    # ── Формирование текста ──
+    def make_output_short(self, bs, RDB):
+        return (f"** {bs} **\n"
+                f"Координаты : {RDB[bs].get('coordinates', '')}\n"
+                f"Адрес : {RDB[bs].get('address', '')}\n"
+                f"Яндекс : {RDB[bs].get('yandex_map', '')}\n"
+                f"ЦТЭиСО : {RDB[bs].get('service_center', '')}\n")
+
+    def make_output_long(self, bs, RDB):
+        return (f"*** {bs} ***\n"
+                f"Формат КрТ: {RDB[bs].get('arc_id', '')}\n"
+                f"Приоритет: {RDB[bs].get('priority', '')}\n"
+                f"Адрес : {RDB[bs].get('address', '')}\n"
+                f"Координаты : {RDB[bs].get('coordinates', '')}\n"
+                f"Конструктивный тип сайта: {RDB[bs].get('constructional_type', '')}\n"
+                f"Арендодатель : {RDB[bs].get('rent', '')}\n"
+                f"Статус: {RDB[bs].get('status', '')}\n"
+                f"Трансмиссия : {RDB[bs].get('transmission', '')}\n"
+                f"Доступ:{RDB[bs].get('access', '')}\n"
+                f"Аппаратная: {RDB[bs].get('hw_room', '')}\n"
+                f"Ответственный по стройке : {RDB[bs].get('builder', '')}\n"
+                f"Подрядчик на строительство : {RDB[bs].get('contractor', '')}\n"
+                f"Ответственный по трансмиссии : {RDB[bs].get('transmissionist', '')}\n"
+                f"ЦТЭиСО : {RDB[bs].get('service_center', '')}\n")
+
+    def make_output(self):
+        RDB = self.RDB
+        raw = self.ids.bs_name.text.strip()
+        if not raw:
+            return
+
+        short = raw.startswith("**")
+        raw = raw.replace("**", "")
+        mode = self.ids.spinner_id.text
+
+        if mode == "БС":
+            if len(raw.split()) == 1:
+                prefix = (4 - len(raw)) * "0"
+                target = "CR" + prefix + raw
+                if target not in RDB:
+                    target = target.replace("CR", "SE")
+                if target in RDB:
+                    out = (self.make_output_short(target, RDB) if short
+                           else self.make_output_long(target, RDB))
+                    self.route = RDB[target].get("yandex_map", "")
+                    self.ids.output_text.text = out
+                else:
+                    self.ids.output_text.text = "YOU ARE WRONG.."
+                self.ids.bs_name.text = ""
+
+            elif len(raw.split()) > 1:
+                coords, total = [], ""
+                for bs in raw.split():
+                    prefix = (4 - len(bs)) * "0"
+                    target = "CR" + prefix + bs
+                    if target not in RDB:
+                        target = target.replace("CR", "SE")
+                    if target in RDB:
+                        out = (self.make_output_short(target, RDB) if short
+                               else self.make_output_long(target, RDB))
+                        if 'latitude' in RDB[target] and 'longitude' in RDB[target]:
+                            coords.append(
+                                f"{RDB[target]['latitude']}%2C{RDB[target]['longitude']}")
+                        total += "\n" + out
+                if coords:
+                    self.route = (f"https://yandex.ru/navi?rtext="
+                                  f"{'~'.join(coords)}&rtt=auto")
+                self.ids.output_text.text = total or "БС не найдены."
+                self.ids.bs_name.text = ""
+
+        elif mode == "ARC":
+            total = ""
+            for key in RDB:
+                ktk = RDB[key].get("arc_id")
+                if ktk and ("ARC" + raw in str(ktk)):
+                    s = (f"*** {key} ***\n"
+                         f"Формат КрТ: {RDB[key].get('arc_id', '')}\n"
+                         f"Адрес : {RDB[key].get('address', '')}\n"
+                         f"Координаты : {RDB[key].get('coordinates', '')}\n"
+                         f"Конструктивный тип сайта : {RDB[key].get('constructional_type', '')}\n"
+                         f"Арендодатель : {RDB[key].get('rent', '')}\n"
+                         f"Статус : {RDB[key].get('status', '')}\n"
+                         f"Трансмиссия : {RDB[key].get('transmission', '')}\n"
+                         f"Аппаратная : {RDB[key].get('hw_room', '')}\n"
+                         f"Ответственный по стройке : {RDB[key].get('builder', '')}\n"
+                         f"Ответственный инженер эксплуатации: {RDB[key].get('exploiter', '')}\n"
+                         f"Зона Ответственности : {RDB[key].get('service_center', '')}\n")
+                    if RDB[key].get('contact'):
+                        s += f"Контакты : {RDB[key]['contact']}\n"
+                    total += "\n" + s
+            self.ids.output_text.text = total or "Ничего не найдено."
+            self.ids.bs_name.text = ""
+
+
+# ────────────────────────────────────────────────────────────────
+# WORKER — выбор сотрудников
+# ────────────────────────────────────────────────────────────────
+class WorkerWindow(MDScreen):
+    selected = ListProperty([])
+
+    def on_kv_post(self, *_):
+        txt_path = resource_path(os.path.join('service', 'worker_list.txt'))
+        with open(txt_path, "r", encoding="utf-8") as f:
+            workers = [l.strip() for l in f.readlines() if l.strip()]
+
+        for w in workers:
+            item = CheckboxItem(worker_name=w, callback=self._on_check)
+            self.ids.checkbox_container.add_widget(item)
+
+    def _on_check(self, instance, value, worker):
+        if value and worker not in self.selected:
+            self.selected.append(worker)
+        elif not value and worker in self.selected:
+            self.selected.remove(worker)
+
+        try:
+            uber = self.manager.get_screen('Uber')
+            uber.ids.choose_workers_label.text = (
+                ", ".join(self.selected) if self.selected else "Выбрать сотрудников"
+            )
+        except Exception as e:
+            print(f"WorkerWindow: {e}")
+
+
+# ────────────────────────────────────────────────────────────────
+# RESPONSIBLES — выбор ответственного
+# ────────────────────────────────────────────────────────────────
+class ResponsiblesWindow(MDScreen):
+    selected = ListProperty([])
+
+    def on_kv_post(self, *_):
+        workers = sorted(["Мартынов", "Бердиков", "Малатай", "Щербатый",
+                          "Полуяктов", "Кобзарь", "Щербаков"])
+        for w in workers:
+            item = CheckboxItem(worker_name=w, callback=self._on_check)
+            self.ids.respons_checkbox_container.add_widget(item)
+
+    def _on_check(self, instance, value, worker):
+        if value and worker not in self.selected:
+            self.selected.append(worker)
+        elif not value and worker in self.selected:
+            self.selected.remove(worker)
+
+        try:
+            uber = self.manager.get_screen('Uber')
+            uber.ids.choose_respons_button.text = (
+                ", ".join(self.selected) if self.selected else "Выбрать ответственного"
+            )
+        except Exception as e:
+            print(f"ResponsiblesWindow: {e}")
+
+
+# ────────────────────────────────────────────────────────────────
+# CRWO — вывод готовой заявки
+# ────────────────────────────────────────────────────────────────
+class CrwoWindow(MDScreen):
+    def copy_to_clipboard(self, string):
+        if string:
+            Clipboard.copy(string)
+
+    def open_browser(self, route):
+        """ Открывает сгенерированную ссылку на навигатор """
+        if route:
+            webbrowser.open(route)
+
+
+
+# ────────────────────────────────────────────────────────────────
+# UBER — главный экран формирования заявки
+# ────────────────────────────────────────────────────────────────
+class UberWindow(MDScreen):
+    RDB = {}
+    plural = BooleanProperty(False)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.dialog = None
+        # Загружаем базу
+        try:
+            with open(resource_path('RDB.pickle'), "rb") as f:
+                UberWindow.RDB = pickle.load(f)
+        except FileNotFoundError:
+            UberWindow.RDB = {}
+
+        # 2. Метод для проверки одиночная БС или их несколько (вызывается при вводе текста)
+    def check_plural_bs(self, text):
+        # Если в тексте есть пробелы, значит введено несколько БС
+        if len(text.strip().split()) > 1:
+            self.plural = True
+        else:
+            self.plural = False
+
+    def on_kv_post(self, *_):
+        # Номер заявки
+        try:
+            with open(service_path('crwo_cnt.txt'), "r", encoding="utf-8") as f:
+                self.ids.crwo_number.text = f.read().strip()
+        except FileNotFoundError:
+            self.ids.crwo_number.text = ""
+        # Ответственный
+        try:
+            with open(service_path('responsible.txt'), "r", encoding="utf-8") as f:
+                self.ids.respo_worker.text = f.read().strip()
+        except FileNotFoundError:
+            self.ids.respo_worker.text = ""
+
+    # ── Диалог ──
+    def show_dialog(self, text, title="Не хватает данных"):
+        if not self.dialog:
+            self.dialog = MDDialog(
+                title=title,
+                text=text,
+                buttons=[MDFlatButton(text="OK",
+                                      on_release=lambda x: self.dialog.dismiss())],
+            )
+        else:
+            self.dialog.title = title
+            self.dialog.text = text
+        self.dialog.open()
+
+    # ── Очистки ──
+    def clear_description(self):
+        self.ids.work_description.text = ""
+
+    def clear_tt_number(self):
+        self.ids.tt_number.text = ""
+
+    def clear_bs_name(self):
+        self.ids.bs_name.text = ""
+
+    # ── Инкремент / декремент номера заявки ──
+    def crwo_increment(self, string):
+        if string.isdigit():
+            self.ids.crwo_number.text = str(int(string) + 1)
+        else:
+            self.ids.crwo_number.text = "0"
+
+    def crwo_decrement(self, string):
+        if string.isdigit():
+            self.ids.crwo_number.text = str(int(string) - 1)
+        else:
+            self.ids.crwo_number.text = "0"
+
+    # ── Запись в service/ ──
+    def write_crwo_list(self, value):
+        with open(service_path('crwo_cnt.txt'), "w", encoding="utf-8") as f:
+            f.write(str(value))
+
+    def write_responsible_worker(self, value):
+        with open(service_path('responsible.txt'), "w", encoding="utf-8") as f:
+            f.write(str(value))
+
+    # ── Валидация и старт ──
+    def start(self):
+        mode = self.ids.moto_spinner.text
+        count, warn = 0, ""
+
+        if not self.ids.crwo_number.text:
+            count += 1; warn += f"{count}. Не заполнен номер заявки\n"
+        if not self.ids.respo_worker.text:
+            count += 1; warn += f"{count}. Нужно ввести фамилию ответственного\n"
+        if self.ids.choose_workers_label.text in ("", ""):
+            count += 1; warn += f"{count}. Не выбран ни один сотрудник\n"
+
+        if mode == "БС":
+            if not self.ids.bs_name.text:
+                count += 1; warn += f"{count}. Не заполнен номер БС\n"
+            if self.ids.tt_spinner.text == "TT" and not self.ids.tt_number.text:
+                count += 1; warn += f"{count}. Не заполнен номер ТТ\n"
+        elif mode == "Офис":
+            if not self.ids.work_description.text:
+                count += 1; warn += (f"{count}. Активен режим 'Офис', "
+                                     f"заполнение поля 'Описание работ' ОБЯЗАТЕЛЬНО!\n")
+
+        if warn:
+            self.show_dialog(warn)
+            return False
+
+        self.uber_make_output_sheet()
+        return True
+
+    # ── Формирование заявки ──
+    def uber_make_output_sheet(self):
+        # 1. ОБЪЯВЛЯЕМ ИНИЦИАЛЬНЫЕ ЗНАЧЕНИЯ ДЛЯ ВСЕХ ВЫХОДНЫХ ПЕРЕМЕННЫХ
+        output = ""
+        fin_output = ""
+        checked_fin_out = ""
+
+        ZO = {"SEV": "Севастополь", "FEO": "Феодосия", "EVP": "Евпатория",
+              "YAL": "Феодосия", "SIM": "Симферополь", "KER": "Керчь"
+              }.get(self.ids.region_short.text, "")
+
+        crwo_num = self.ids.crwo_number.text
+        prefix = (8 - len(crwo_num)) * "0"
+        crwo_number = f"CRWO_{self.ids.region_short.text}_{prefix}{crwo_num}"
+        self.plural = False
+        if self.ids.organization.text == "ПО ЮСТК":
+            responsibles = self.ids.respo_worker.text
+            organization = f"🐝{self.ids.organization.text}"
+        else:
+            responsibles = self.ids.choose_workers_label.text
+            organization = f"🍊{self.ids.organization.text}"
+
+        t = self.ids.time_to_go_spinner.text
+        hours = 2 if t == "Назначить время" else int(t.split()[0])
+
+        work_desc = self.ids.work_description.text or self.ids.work_description_spinner.text
+
+        now = datetime.now().strftime('%d.%m.%Y %H:%M')
+        arrive = (datetime.now() + timedelta(hours=hours)).strftime('%d.%m.%Y %H:%M')
+
+        mode = self.ids.moto_spinner.text
+
+        if mode == "MOTO":
+            output = (f'{crwo_number} / БЦ "Владимир"\n'
+                      f"Адрес: г.Феодосия, ул. Чехова, д.5\n"
+                      f"Тип работ: Обязательные ежедневные процедуры\n"
+                      f"Описание работ: Прохождение Медицинского Осмотра, "
+                      f"Открытие путевых листов.\n"
+                      f"Дата/время выдачи задания: {now}\n"
+                      f"Время прибытия: {arrive}\n"
+                      f"Ответственный ММ : {responsibles}\n"
+                      f"ЗО : {ZO}")
+            # Присваиваем значение, чтобы избежать UnboundLocalError
+            fin_output = output
+            checked_fin_out = output
+
+        elif mode == "Офис":
+            output = (f'{crwo_number} / Офис\n'
+                      f"Адрес: г.Феодосия, с.Ближнее, ул. Боевая, 2а.\n"
+                      f"Тип работ: Работы на Офисе\n"
+                      f"Описание работ: {work_desc}\n"
+                      f"Дата/время выдачи задания: {now}\n"
+                      f"Время прибытия: {arrive}\n"
+                      f"Ответственный ММ : {responsibles}\n"
+                      f"ЗО : {ZO}")
+            # Присваиваем значение, чтобы избежать UnboundLocalError
+            fin_output = output
+            checked_fin_out = output
+
+        else:  # БС
+            bs = self.ids.bs_name.text
+            if len(bs.split()) == 1:
+                if bs not in self.RDB:
+                    if self.ids.region_short.text == "SEV":
+                        p = (4 - len(bs)) * "0"
+                        bs = "SE" + p + bs
+                    else:
+                        p = (4 - len(bs)) * "0"
+                        bs = "CR" + p + bs
+                if bs in self.RDB:
+                    output = (f"{crwo_number} / {bs}\n"
+                              f"Номер ТТ: {self.ids.tt_number.text}\n"
+                              f"Адрес: {self.RDB[bs]['address']}\n"
+                              f"Координаты: {self.RDB[bs]['coordinates']}\n"
+                              f"Тип работ: {self.ids.work_type.text}\n"
+                              f"Описание работ: {work_desc}\n"
+                              f"Дата/время выдачи задания: {now}\n"
+                              f"Время прибытия: {arrive}\n"
+                              f"Организация :{organization}\n"
+                              f"Ответственный ММ : {responsibles}\n"
+                              f"ЗО : {ZO}")
+                    # Переносим результат в финальные переменные
+                    fin_output = output
+                    checked_fin_out = output
+                else:
+                    self.show_dialog("НЕТ ТАКОЙ БС")
+                    return
+
+            else:  # Если ввели несколько БС через пробел
+                bs_names = []
+                checked_output = ""
+                crwo_delta = 0
+
+                for b in bs.split():
+                    bs_current = b  # Используем новую переменную, чтобы не портить исходный список bs
+                    if bs_current not in self.RDB:
+                        if self.ids.region_short.text == "SEV":
+                            p = (4 - len(bs_current)) * "0"
+                            bs_current = "SE" + p + bs_current
+                        else:
+                            p = (4 - len(bs_current)) * "0"
+                            bs_current = "CR" + p + bs_current
+
+                    # ВАЖНО: проверка существования БС перенесена на один уровень назад (к if/else)
+                    if bs_current in self.RDB:
+                        if self.ids.single_request_checkbox.active:
+
+                            bs_names.append(bs_current)
+                            checked_bs = ', '.join(bs_names)
+                            checked_output = (f"{crwo_number} / {checked_bs}\n"
+                                              f"Номер ТТ: {self.ids.tt_number.text}\n"
+                                              f"Тип работ: {self.ids.work_type.text}\n"
+                                              f"Описание работ: {work_desc}\n"
+                                              f"Дата/время выдачи задания: {now}\n"
+                                              f"Время прибытия: {arrive}\n"
+                                              f"Организация :{organization}\n"
+                                              f"Ответственный ММ : {responsibles}\n"
+                                              f"ЗО : {ZO}")
+                            crwo_delta +=1
+
+                        else:
+
+                            crwo_number = f"CRWO_{self.ids.region_short.text}_{prefix}{str(int(crwo_num) + crwo_delta)}"
+                            output = (f"{crwo_number} / {bs_current}\n"
+                                      f"Номер ТТ: {self.ids.tt_number.text}\n"
+                                      f"Адрес: {self.RDB[bs_current]['address']}\n"
+                                      f"Координаты: {self.RDB[bs_current]['coordinates']}\n"
+                                      f"Тип работ: {self.ids.work_type.text}\n"
+                                      f"Описание работ: {work_desc}\n"
+                                      f"Дата/время выдачи задания: {now}\n"
+                                      f"Время прибытия: {arrive}\n"
+                                      f"Организация :{organization}\n"
+                                      f"Ответственный ММ : {responsibles}\n"
+                                      f"ЗО : {ZO}")
+                            crwo_delta += 1
+
+                            if fin_output:
+                                fin_output += "\n\n" + output
+                            else:
+                                fin_output = output
+
+                # После завершения цикла форматируем результат
+                checked_fin_out = checked_output
+
+        # 2. ВЫВОД РЕЗУЛЬТАТА НА ЭКРАН КИВИ
+        crwo_screen = self.manager.get_screen('CrwoWindow')
+        if self.ids.single_request_checkbox.active:
+            crwo_screen.ids.crwo_text_output.text = checked_fin_out
+        else:
+            crwo_screen.ids.crwo_text_output.text = fin_output
+
+
+# ────────────────────────────────────────────────────────────────
+# SETTINGS — обновление БД из Excel
+# ────────────────────────────────────────────────────────────────
+class SettingsWindow(MDScreen):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.dialog = None
+        self.file_manager = None
+
+    def open_file_manager(self):
+        from kivymd.uix.filemanager import MDFileManager
+        downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
+        if not os.path.exists(downloads):
+            downloads = os.path.expanduser('~')
+
+        self.file_manager = MDFileManager(
+            exit_manager=self.exit_file_manager,
+            select_path=self.select_path,
+            preview=False,
+            ext=[".xls", ".xlsx", ".csv"],
+        )
+        self.file_manager.show(downloads)
+
+    def exit_file_manager(self, *_):
+        if self.file_manager:
+            self.file_manager.close()
+
+    def select_path(self, path):
+        self.exit_file_manager()
+        if path.lower().endswith(('.xls', '.xlsx', '.csv')):
+            self.rdb_update(path)
+        else:
+            self.show_dialog("Выбран некорректный формат файла!")
+
+    def show_dialog(self, text, title="Внимание"):
+        if not self.dialog:
+            self.dialog = MDDialog(
+                title=title, text=text,
+                buttons=[MDFlatButton(text="OK",
+                                      on_release=lambda x: self.dialog.dismiss())],
+            )
+        else:
+            self.dialog.title = title
+            self.dialog.text = text
+        self.dialog.open()
+
+    def rdb_update(self, chosen_file):
+        bs_list, bs_sorted, bs_dict = [], [], {}
+
+        wb = openpyxl.load_workbook(filename=chosen_file)
+        for sheet in wb.worksheets:
+            for i in range(2, sheet.max_row):
+                if sheet[f'a{i}'].value is not None:
+                    bs_list.append(sheet[f'a{i}'].value)
+        wb.close()
+
+        for i in range(len(bs_list)):
+            if i == len(bs_list) - 1:
+                bs_sorted.append(bs_list[i][:6])
+            elif bs_list[i][:6] == bs_list[i + 1][:6] and bs_list[i + 1][-1] > bs_list[i][-1]:
+                bs_sorted.append(bs_list[i + 1][:6])
+            else:
+                bs_sorted.append(bs_list[i][:6])
+        bs_sorted = sorted(set(bs_sorted))
+
+        wb = openpyxl.load_workbook(filename=chosen_file)
+        for sheet in wb.worksheets:
+            for i in range(2, sheet.max_row + 1):
+                if sheet[f'a{i}'].value is not None:
+                    bs = sheet[f'a{i}'].value[:6]
+                    if bs in bs_sorted:
+                        bs_dict[bs] = {
+                            "arc_id": sheet[f'k{i}'].value,
+                            "address": sheet[f'b{i}'].value,
+                            "latitude": sheet[f'c{i}'].value,
+                            "longitude": sheet[f'd{i}'].value,
+                            "coordinates": f"{sheet[f'c{i}'].value} {sheet[f'd{i}'].value}",
+                            "yandex_map": (f"https://yandex.ru/navi/?whatshere%5Bzoom%5D=17"
+                                           f"&whatshere%5Bpoint%5D={sheet[f'd{i}'].value}"
+                                           f"%2C{sheet[f'c{i}'].value}"),
+                            "constructional_type": sheet[f'e{i}'].value,
+                            "rent": sheet[f'f{i}'].value,
+                            "status": sheet[f'g{i}'].value,
+                            "priority": sheet[f'q{i}'].value,
+                            "transmission": sheet[f'h{i}'].value,
+                            "hw_room": sheet[f'i{i}'].value,
+                            "builder": sheet[f'm{i}'].value,
+                            "contractor": sheet[f'p{i}'].value,
+                            "exploiter": sheet[f'l{i}'].value,
+                            "service_center": sheet[f'j{i}'].value,
+                            "transmissionist": sheet[f'n{i}'].value,
+                            "access": sheet[f'o{i}'].value,
+                        }
+        wb.close()
+
+        with open(resource_path('RDB.pickle'), "wb") as f:
+            pickle.dump(bs_dict, f)
+
+        self.show_dialog(
+            "Обновление завершено. Чтобы изменения вступили в силу, "
+            "перезагрузите приложение.",
+            title="Готово",
+        )
+
+
+# ────────────────────────────────────────────────────────────────
+# TORUS — выбор документа и региона
+# ────────────────────────────────────────────────────────────────
+class TorusWindow(MDScreen):
+    selected_region = StringProperty("FEO")
+    path = StringProperty("")  # Объявляем свойство Kivy
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.file_manager = None
+
+    def open_file_manager(self):
+        from kivymd.uix.filemanager import MDFileManager
+        downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
+        if not os.path.exists(downloads):
+            downloads = os.path.expanduser('~')
+
+        self.file_manager = MDFileManager(
+            exit_manager=self.exit_file_manager,
+            select_path=self.select_path,
+            preview=False,
+            ext=[".xls", ".xlsx", ".csv"],
+        )
+        self.file_manager.show(downloads)
+
+    def exit_file_manager(self, *_):
+        if self.file_manager:
+            self.file_manager.close()
+
+    def show_dialog(self, text, title="ВНИМАНИЕ!"):
+        if not self.dialog:
+            self.dialog = MDDialog(
+                title=title,
+                text=text,
+                buttons=[MDFlatButton(text="OK",
+                                      on_release=lambda x: self.dialog.dismiss())],
+            )
+        else:
+            self.dialog.title = title
+            self.dialog.text = text
+        self.dialog.open()
+
+    def torus_again(self):
+        self.show_dialog("Еще в разработке")
+
+
+    def torus_procedure(self,region,path):
+        if region == "FEO":
+            region = "‘еодоси€"
+        elif region == "EVP":
+            region = "≈впатори€"
+        elif region == "KER":
+            region = "\xa0ерчь"
+        elif region == "YAL":
+            region = "ялта"
+        elif region == "SIM":
+            region = "—имферополь"
+
+        df = pd.read_csv(path, engine='python', delimiter=';',
+                         encoding='MacCyrillic')  # encoding='MacCyrillic' ,encoding='iso-8859-1'
+        # encoding_errors='replace', engine='python', on_bad_lines='skip'
+        # encoding='iso-8859-1' , encoding='windows-1252', encoding='utf-8',encoding='utf-8-sig'
+        # delimiter=';'
+        # low_memory=False
+        # writefile = codecs.open(path, 'w', 'utf-8')
+        ######################################################################################
+
+
+        # 1. Создаем DataFrame и сразу приводим типы данных к корректным
+        data = pd.DataFrame(df, columns=[
+            'RECDATE', 'Subregion', 'vCELL',
+            'Cell Avail 2G (%)', 'Cell Avail 3G (%)', 'Cell Avail 4G (%)',
+            'OnAir_2G', 'OnAir_3G', 'OnAir_4G'
+        ])
+
+        # Оставляем только дату (без времени)
+        data['RECDATE'] = data['RECDATE'].astype(str).str.split().str[0]
+
+        # Очищаем текстовые проценты (заменяем "," на ".") и переводим в числа для всех технологий разом
+        tech_columns = ['Cell Avail 2G (%)', 'Cell Avail 3G (%)', 'Cell Avail 4G (%)']
+        for col in tech_columns:
+            data[col] = data[col].astype(str).str.replace(',', '.', regex=False).astype(float)
+
+        # 2. Фильтруем данные по нужному региону
+        region_data = data[data['Subregion'] == region]
+
+        # 3. Считаем средние показатели (только для работающих базовых станций OnAir == 1)
+        gsm_average = region_data[region_data['OnAir_2G'] == 1]['Cell Avail 2G (%)'].mean().round(3)
+        umts_average = region_data[region_data['OnAir_3G'] == 1]['Cell Avail 3G (%)'].mean().round(3)
+        lte_average = region_data[region_data['OnAir_4G'] == 1]['Cell Avail 4G (%)'].mean().round(3)
+
+        # 4. Выделяем проблемные соты (где доступность меньше 100% и они OnAir)
+        # Теперь, когда типы данных — float, сравнение с 100 (или 100.0) сработает верно
+        # Выделяем проблемные соты и сортируем их ПО ВОЗРАСТАНИЮ ПРОЦЕНТА ДОСТУПНОСТИ
+        gsm_table = region_data[
+            (region_data['Cell Avail 2G (%)'] < 100) & (region_data['OnAir_2G'] == 1)
+            ][['RECDATE', 'vCELL', 'Cell Avail 2G (%)']].sort_values(by='Cell Avail 2G (%)', ascending=True)
+
+        umts_table = region_data[
+            (region_data['Cell Avail 3G (%)'] < 100) & (region_data['OnAir_3G'] == 1)
+            ][['RECDATE', 'vCELL', 'Cell Avail 3G (%)']].sort_values(by='Cell Avail 3G (%)', ascending=True)
+
+        lte_table = region_data[
+            (region_data['Cell Avail 4G (%)'] < 100) & (region_data['OnAir_4G'] == 1)
+            ][['RECDATE', 'vCELL', 'Cell Avail 4G (%)']].sort_values(by='Cell Avail 4G (%)', ascending=True)
+
+        # 5. Считаем уникальное количество Базовых Станций (BS quantity)
+        # Исключаем соты, начинающиеся на CR3 и CR4
+        bs_quan = region_data[
+                      (~region_data['vCELL'].astype(str).str.startswith('CR3')) &
+                      (~region_data['vCELL'].astype(str).str.startswith('CR4'))
+                      ]['vCELL'].str[:6].nunique()
+
+        gsm_table = gsm_table.to_string(index=False)
+        umts_table = umts_table.to_string(index=False)
+        lte_table = lte_table.to_string(index=False)
+        return bs_quan,gsm_table,umts_table,lte_table
+
+    def select_path(self, path):
+        self.exit_file_manager()
+        if not path.lower().endswith(('.xls', '.xlsx', '.csv')):
+            print("Неверный формат файла")
+            return
+        print(f"Выбран файл: {path}")
+        path_to_file = path
+        print(f"Регион: {self.selected_region}")
+        region  = self.selected_region
+        # Тут твоя логика обработки Torus-файла
+        bs_quan, gsm_table, umts_table, lte_table = self.torus_procedure(region,path)
+
+        network_tabs_screen = self.manager.get_screen('NetworkTabsWindow')
+        # Теперь обращаемся к ids этого экрана
+        network_tabs_screen.ids.app_bar.title = f"Всего {bs_quan} БС"
+        network_tabs_screen.ids.gsm.text = gsm_table
+        network_tabs_screen.ids.umts.text = umts_table
+        network_tabs_screen.ids.lte.text = lte_table
+
+        self.manager.current = 'NetworkTabsWindow'
+        self.manager.transition.direction = 'left'
+
+
+# ────────────────────────────────────────────────────────────────
+# NETWORK TABS — вкладки GSM / UMTS / LTE
+# ────────────────────────────────────────────────────────────────
+class NetworkTabsWindow(MDScreen):
+    def copy_current_tab(self, *_):
+        """Копирует текст активной вкладки MDTabs."""
+        try:
+            tabs = self.ids.tabs
+            current = tabs.get_current_tab()
+            # содержимое вкладки — MDScrollView, внутри которого MDLabel
+            label = current.children[0]
+            print(type(label))
+            if label.text:
+                Clipboard.copy(label.text)
+                print(f"Скопировано из вкладки: {current.title}")
+        except Exception as e:
+            print(f"copy_current_tab error: {e}")
+
+
+    def go_back(self):
+        self.manager.current = 'TorusWindow'
+        self.manager.transition.direction = 'right'
+
+    def go_cancel(self):
+        self.manager.current = 'Gooranda'
+        self.manager.transition.direction = 'right'
+
+
+# ────────────────────────────────────────────────────────────────
+# КОРНЕВОЙ SCREEN MANAGER
+# ────────────────────────────────────────────────────────────────
+class WindowManager(MDScreenManager):
+    pass
+
+
+# ────────────────────────────────────────────────────────────────
+# ГЛАВНОЕ ПРИЛОЖЕНИЕ
+# ────────────────────────────────────────────────────────────────
+class UberGoorandaApp(MDApp):
+
+    # ── Списки вариантов для меню ──
+    TT_OPTIONS = ["TT", "Без ТТ"]
+    MOTO_OPTIONS = ["БС", "Офис", "MOTO"]
+    REGION_OPTIONS = ["FEO", "EVP", "KER", "SIM", "SEV", "YAL"]
+    ORGANIZATION_OPTIONS = ["Миранда-Медиа", "ПО ЮСТК"]
+    WORK_TYPE_OPTIONS = [
+        "🚑 АВР", "🔋 ДГУ", "🛠 ППР", "⚙️ ТО",
+        "📸 ДВ", "🔑 РАБОТЫ ПО ЗАДАНИЮ",
+        "❤️ Обязательные процедуры",
+    ]
+    TIME_OPTIONS = ["Назначить время", "1 час", "2 часа",
+                    "3 часа", "4 часа", "5 часов", "6 часов"]
+    WORK_DESC_OPTIONS = [
+        "⚙️ Провести ТО Базовой станции",
+        "🪫 Запитать БС от ДГУ",
+        "⛽️Заправка генераторов Базовых Станций",
+        "🌿 Обкосить траву по периметру БС",
+        "❤️ Прохождение МО и ТО",
+    ]
+    MODE_OPTIONS = ["БС", "ARC", "ТП", "Адрес"]
+
+    def build(self):
+        self.theme_cls.theme_style = "Light"
+        self.theme_cls.primary_palette = "Blue"
+        self.theme_cls.accent_palette = "Teal"
+
+        Builder.load_file(resource_path('ui.kv'))
+
+        sm = WindowManager()
+        sm.add_widget(GoorandaWindow(name="Gooranda"))
+        sm.add_widget(UberWindow(name="Uber"))
+        sm.add_widget(WorkerWindow(name="WorkerWindow"))
+        sm.add_widget(ResponsiblesWindow(name="Responsibles"))
+        sm.add_widget(CrwoWindow(name="CrwoWindow"))
+        sm.add_widget(SettingsWindow(name="SettingsWindow"))
+        sm.add_widget(TorusWindow(name="TorusWindow"))
+        sm.add_widget(NetworkTabsWindow(name="NetworkTabsWindow"))
+        return sm
+
+    # ── Навигация ──
+    def go_to(self, screen_name, direction="left"):
+        self.root.current = screen_name
+        self.root.transition.direction = direction
+
+    def go_back(self, screen_name):
+        self.root.current = screen_name
+        self.root.transition.direction = "right"
+
+    # ── Универсальное открытие меню по имени поля ──
+    def open_menu(self, caller, options):
+        items = [
+            {"text": opt, "viewclass": "OneLineListItem",
+             "on_release": lambda x=opt: self._set_value(caller, x)}
+            for opt in options
+        ]
+        self.menu = MDDropdownMenu(caller=caller, items=items, width_mult=4)
+        self.menu.open()
+
+    def _set_value(self, caller, value):
+        caller.text = value
+        if self.menu:
+            self.menu.dismiss()
+
+    # ── Конкретные меню (вызываются из kv) ──
+    def open_mode_menu(self, caller):
+        self.open_menu(caller, self.MODE_OPTIONS)
+
+    def open_tt_menu(self, caller):
+        self.open_menu(caller, self.TT_OPTIONS)
+
+    def open_moto_menu(self, caller):
+        self.open_menu(caller, self.MOTO_OPTIONS)
+
+    def open_region_menu(self, caller):
+        self.open_menu(caller, self.REGION_OPTIONS)
+        # При выборе обновим TorusWindow
+        torus = self.root.get_screen("TorusWindow")
+        torus.selected_region = caller.text
+
+    def open_organization_menu(self, caller):
+        self.open_menu(caller, self.ORGANIZATION_OPTIONS)
+
+    def open_work_type_menu(self, caller):
+        self.open_menu(caller, self.WORK_TYPE_OPTIONS)
+
+    def open_time_menu(self, caller):
+        self.open_menu(caller, self.TIME_OPTIONS)
+
+    def open_work_desc_menu(self, caller):
+        self.open_menu(caller, self.WORK_DESC_OPTIONS)
+
+    def _set_mode(self, caller, text):
+        caller.text = text
+        self.menu.dismiss()
+
+    # ── Меню выбора региона для Torus ──
+    def open_region_menu(self, caller):
+        regions = ["FEO", "EVP", "KER", "SIM", "SEV", "YAL"]
+        items = [
+            {"text": r, "viewclass": "OneLineListItem",
+             "on_release": lambda x=r: self._set_region(caller, x)}
+            for r in regions
+        ]
+        self.menu = MDDropdownMenu(caller=caller, items=items, width_mult=3)
+        self.menu.open()
+
+    def _set_region(self, caller, region):
+        caller.text = region
+        torus = self.root.get_screen("TorusWindow")
+        torus.selected_region = region
+        self.menu.dismiss()
+
+
+if __name__ == '__main__':
+    UberGoorandaApp().run()
