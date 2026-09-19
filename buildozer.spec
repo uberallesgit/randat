@@ -31,8 +31,7 @@ source.include_patterns = service/*
 version = 1.0
 
 # (list) Application requirements
-requirements = python3,kivy==2.3.1,kivymd==1.1.1,pillow,openpyxl,et-xmlfile
-
+requirements = python3, kivy==https://github.com/kivy/kivy/archive/refs/tags/2.3.1.zip, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, cython==3.0.11
 # (str) Presplash of the application
 # presplash.filename = %(source.dir)s/data/presplash.png
 
@@ -58,7 +57,7 @@ android.minapi = 21
 #android.sdk = 24
 
 # (str) Android NDK version to use
-#android.ndk = 25b
+android.ndk = 25b
 
 # (list) Android application meta-data to set (key=value format)
 #android.meta_data =
@@ -67,7 +66,7 @@ android.minapi = 21
 #android.entrypoint = org.kivy.android.PythonActivity
 
 # (list) Android archs to build
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a,
 
 # (list) List of Java .jar files to add to the libs
 #android.add_jars = foo.jar,bar.jar
