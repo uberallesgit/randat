@@ -29,7 +29,7 @@ version = 1.0
 
 # (list) Application requirements
 # !!! ЭТА СТРОКА ИСПРАВЛЕНА !!!
-requirements = python3, kivy==https://github.com/kivy/kivy/archive/refs/tags/2.3.1.zip, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, cython==3.0.11
+requirements = requirements = python3,kivy==2.3.1,kivymd==1.1.1,pillow,openpyxl,et-xmlfile,cython==3.0.11
 
 # (str) Supported orientations
 orientation = portrait
