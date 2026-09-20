@@ -1,7 +1,6 @@
 import os
-import pandas as pd
-import csv
 import sys
+import csv
 import pickle
 import webbrowser
 from datetime import datetime, timedelta
@@ -23,6 +22,11 @@ from kivymd.uix.list import ILeftBodyTouch, OneLineAvatarIconListItem
 from kivymd.uix.toolbar import MDTopAppBar  # noqa
 from kivy.properties import BooleanProperty
 from kivymd.uix.dropdownitem import MDDropDownItem
+import os
+os.environ['KIVY_GL_BACKEND'] = 'sdl2'
+os.environ['KIVY_GRAPHICS'] = 'gles'
+os.environ['KIVY_GLES_LIMITS'] = '0'
+os.environ['KIVY_NO_ARGS'] = '1'
 
 class MyTab(MDBoxLayout, MDTabsBase):
     """Класс для вкладки MDTabs."""
@@ -708,7 +712,7 @@ class TorusWindow(MDScreen):
         elif region == "SIM":
             region = "—имферополь"
 
-        # ─── Читаем CSV через встроенный csv (без pandas) ───
+        # ─── Читаем CSV через встроенный csv ───
         rows = []
         with open(path, "r", encoding="MacCyrillic", newline="") as f:
             reader = csv.DictReader(f, delimiter=";")
@@ -802,6 +806,7 @@ class TorusWindow(MDScreen):
 
         self.manager.current = 'NetworkTabsWindow'
         self.manager.transition.direction = 'left'
+
 
 
 # ────────────────────────────────────────────────────────────────
