@@ -71,13 +71,13 @@
                 height: "48dp"
                 spacing: "10dp"
 
-                MDRaisedButton:
+                MDFlatButton:
                     text: "КОПИРОВАТЬ"
                     elevation: 0
                     disabled: output_text.text == ""
                     on_release: root.copy_to_clipboard(output_text.text)
 
-                MDRaisedButton:
+                MDFlatButton:
                     text: "НАВИГАТОР"
                     elevation: 0
                     md_bg_color: app.theme_cls.accent_color
@@ -101,7 +101,7 @@
                     text_validate_unfocus: False
                     on_text_validate: root.make_output()
 
-                MDRaisedButton:
+                MDFlatButton:
                     text: "GO"
                     elevation: 0
                     size_hint_x: None
@@ -236,12 +236,12 @@
                 height: "48dp"
                 spacing: "10dp"
 
-                MDRaisedButton:
+                MDFlatButton:
                     text: "КОПИРОВАТЬ"
                     elevation: 0
                     on_release: root.copy_to_clipboard(crwo_text_output.text)
 
-                MDRaisedButton:
+                MDFlatButton:
                     text: "НАЗАД"
                     elevation: 0
                     md_bg_color: app.theme_cls.accent_color
@@ -292,7 +292,7 @@
                     height: "56dp"
                     spacing: "6dp"
 
-                    MDRaisedButton:
+                    MDFlatButton:
                         text: "-1"
                         elevation: 0
                         size_hint_x: None
@@ -304,7 +304,7 @@
                         hint_text: "Номер CRWO"
                         mode: "rectangle"
 
-                    MDRaisedButton:
+                    MDFlatButton:
                         text: "+1"
                         elevation: 0
                         size_hint_x: None
@@ -436,7 +436,7 @@
                     height: "56dp"
                     spacing: "6dp"
 
-                    MDRaisedButton:
+                    MDFlatButton:
                         text: "Выбрать сотрудников"
                         elevation: 0
                         pos_hint: {"center_y": .5}
@@ -476,7 +476,7 @@
             size_hint: 1, None
             height: "80dp"
 
-            MDRaisedButton:
+            MDFlatButton:
                 text: "СФОРМИРОВАТЬ ЗАЯВКУ"
                 elevation: 0
                 size_hint: None, .8
@@ -530,7 +530,7 @@
                 size_hint_y: None
                 height: "60dp"
 
-            MDRaisedButton:
+            MDFlatButton:
                 text: "ВЫБРАТЬ ФАЙЛ"
                 elevation: 0
                 pos_hint: {"center_x": 0.5}
@@ -584,14 +584,14 @@
                 pos_hint: {"center_x": 0.5}
                 on_release: app.open_region_menu(self)
 
-            MDRaisedButton:
+            MDFlatButton:
                 id: torus_again
                 text: "AGAIN"
                 elevation: 0
                 pos_hint: {"center_x": 0.5}
                 on_release: root.torus_again
 
-            MDRaisedButton:
+            MDFlatButton:
                 text: "ВЫБРАТЬ ФАЙЛ"
                 elevation: 0
                 pos_hint: {"center_x": 0.5}
@@ -683,18 +683,18 @@
             spacing: "8dp"
             padding: "8dp"
 
-            MDRaisedButton:
+            MDFlatButton:
                 text: "НАЗАД"
                 elevation: 0
                 on_release: root.go_back()
 
-            MDRaisedButton:
+            MDFlatButton:
                 text: "КОПИРОВАТЬ"
                 elevation: 0
                 md_bg_color: app.theme_cls.accent_color
                 on_release: root.copy_current_tab()
 
-            MDRaisedButton:
+            MDFlatButton:
                 text: "ОТМЕНА"
                 elevation: 0
                 md_bg_color: 0.9, 0.3, 0.3, 1
