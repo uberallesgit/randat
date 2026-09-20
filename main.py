@@ -23,6 +23,8 @@ from kivymd.uix.toolbar import MDTopAppBar  # noqa
 from kivy.properties import BooleanProperty
 from kivymd.uix.dropdownitem import MDDropDownItem
 from kivy.uix.textinput import TextInput
+from kivy.uix.popup import Popup
+from kivymd.uix.list import MDList, OneLineListItem
 
 import os
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
@@ -915,21 +917,32 @@ class UberGoorandaApp(MDApp):
         self.root.transition.direction = "right"
 
     # ── Универсальное открытие меню по имени поля ──
-    def open_menu(self, caller, options):
-        items = [
-            {"text": opt, "viewclass": "OneLineListItem",
-             "on_release": lambda x=opt: self._set_value(caller, x)}
-            for opt in options
-        ]
-        self.menu = MDDropdownMenu(caller=caller, items=items, width_mult=4)
-        self.menu.open()
+    def open_menu(self, caller, options, on_select=None):
+        list_content = MDList()
+        popup = Popup(
+            title="",
+            separator_height=0,
+            content=list_content,
+            size_hint=(0.85, None),
+            height=min(len(options) * 52 + 30, 480),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=True,
+        )
 
-    def _set_value(self, caller, value):
-        caller.text = value
-        if self.menu:
-            self.menu.dismiss()
+        def _on_select(value):
+            caller.text = value
+            if on_select:
+                on_select(value)
+            popup.dismiss()
 
-    # ── Конкретные меню (вызываются из kv) ──
+        for opt in options:
+            list_content.add_widget(
+                OneLineListItem(text=opt,
+                                on_release=lambda x, v=opt: _on_select(v))
+            )
+        popup.open()
+
     def open_mode_menu(self, caller):
         self.open_menu(caller, self.MODE_OPTIONS)
 
@@ -940,10 +953,14 @@ class UberGoorandaApp(MDApp):
         self.open_menu(caller, self.MOTO_OPTIONS)
 
     def open_region_menu(self, caller):
-        self.open_menu(caller, self.REGION_OPTIONS)
-        # При выборе обновим TorusWindow
-        torus = self.root.get_screen("TorusWindow")
-        torus.selected_region = caller.text
+        def on_region(value):
+            try:
+                torus = self.root.get_screen("TorusWindow")
+                torus.selected_region = value
+            except Exception as e:
+                print(f"open_region_menu: {e}")
+
+        self.open_menu(caller, self.REGION_OPTIONS, on_select=on_region)
 
     def open_organization_menu(self, caller):
         self.open_menu(caller, self.ORGANIZATION_OPTIONS)
@@ -957,26 +974,7 @@ class UberGoorandaApp(MDApp):
     def open_work_desc_menu(self, caller):
         self.open_menu(caller, self.WORK_DESC_OPTIONS)
 
-    def _set_mode(self, caller, text):
-        caller.text = text
-        self.menu.dismiss()
-
-    # ── Меню выбора региона для Torus ──
-    def open_region_menu(self, caller):
-        regions = ["FEO", "EVP", "KER", "SIM", "SEV", "YAL"]
-        items = [
-            {"text": r, "viewclass": "OneLineListItem",
-             "on_release": lambda x=r: self._set_region(caller, x)}
-            for r in regions
-        ]
-        self.menu = MDDropdownMenu(caller=caller, items=items, width_mult=3)
-        self.menu.open()
-
-    def _set_region(self, caller, region):
-        caller.text = region
-        torus = self.root.get_screen("TorusWindow")
-        torus.selected_region = region
-        self.menu.dismiss()
+    # _set_mode — УДАЛИТЬ полностью
 
 
 if __name__ == '__main__':
