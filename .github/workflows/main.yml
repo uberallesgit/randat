@@ -21,23 +21,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev \
+            libssl-dev automake libltdl-dev
 
       - name: Install buildozer and cython
         run: |
           pip3 install --user buildozer cython==3.0.11
-
-      # !!! НОВЫЙ ШАГ: Явное принятие лицензий !!!
-      - name: Accept Android SDK licenses
-        run: |
-          # Находим путь к sdkmanager, который использует Buildozer
-          SDKMANAGER=$(find ~/.buildozer -name sdkmanager -type f | head -n 1)
-          # Если sdkmanager не найден, используем стандартный путь Android SDK
-          if [ -z "$SDKMANAGER" ]; then
-            SDKMANAGER=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
-          fi
-          # Автоматически принимаем все лицензии
-          yes | $SDKMANAGER --licenses || true
 
       - name: Clean previous build cache
         run: |
@@ -45,7 +36,6 @@ jobs:
 
       - name: Build APK
         run: |
-          # 'yes |' автоматически отвечает 'y' на все запросы
           yes | buildozer -v android debug
 
       - name: Upload APK
