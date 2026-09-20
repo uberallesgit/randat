@@ -10,7 +10,7 @@
 
         MDTopAppBar:
             title: "Gooranda Mode"
-            elevation: 3
+            elevation: 0
             left_action_items: [["arrow-up-bold", lambda x: app.go_to("SettingsWindow")],["radio-tower", lambda x: app.go_to("TorusWindow")]]
             right_action_items: [["swap-horizontal", lambda x: app.go_to("Uber")]]
 
@@ -23,7 +23,7 @@
                 orientation: "vertical"
                 padding: "8dp"
                 size_hint_y: 0.55
-                elevation: 2
+                elevation: 0
                 radius: [12, ]
 
                 TextInput:
@@ -91,7 +91,7 @@
 
         MDTopAppBar:
             title: "Выбор сотрудников"
-            elevation: 3
+            elevation: 0
             left_action_items: [["arrow-left", lambda x: app.go_back("Uber")]]
 
         MDScrollView:
@@ -110,7 +110,7 @@
 
         MDTopAppBar:
             title: "Ответственный за заявку"
-            elevation: 3
+            elevation: 0
             left_action_items: [["arrow-left", lambda x: app.go_back("Uber")]]
 
         MDScrollView:
@@ -129,7 +129,7 @@
 
         MDTopAppBar:
             title: "Готовая заявка"
-            elevation: 3
+            elevation: 0
             left_action_items: [["arrow-left", lambda x: app.go_back("Uber")]]
 
         MDBoxLayout:
@@ -140,7 +140,7 @@
             MDCard:
                 padding: "8dp"
                 size_hint_y: 0.85
-                elevation: 2
+                elevation: 0
                 radius: [12, ]
 
                 TextInput:
@@ -182,7 +182,7 @@
 
         MDTopAppBar:
             title: "Uber Mode"
-            elevation: 3
+            elevation: 0
             left_action_items: [["swap-horizontal", lambda x: app.go_back("Gooranda")]]
 
         MDScrollView:
@@ -403,7 +403,7 @@
 
         MDTopAppBar:
             title: "Настройки: обновление БД"
-            elevation: 3
+            elevation: 0
             left_action_items: [["arrow-left", lambda x: app.go_back("Gooranda")]]
 
         MDBoxLayout:
@@ -434,7 +434,7 @@
 
         MDTopAppBar:
             title: "Torus: выбор документа"
-            elevation: 3
+            elevation: 0
             left_action_items: [["arrow-left", lambda x: app.go_back("Gooranda")]]
 
         MDBoxLayout:
@@ -478,7 +478,7 @@
         MDTopAppBar:
             id:app_bar
             title: "Torus: результаты"
-            elevation: 3
+            elevation: 0
             left_action_items: [["arrow-left", lambda x: root.go_back()]]
 
         MDTabs:
