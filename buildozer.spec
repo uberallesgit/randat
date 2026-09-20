@@ -11,7 +11,7 @@ source.include_patterns = service/*
 version = 1.0
 
 # Требования зафиксированы правильно
-requirements = python3, cython==3.0.11, kivy==2.3.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, pandas, numpy
+requirements = python3, cython==3.0.11, kivy==2.3.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile
 orientation = portrait
 fullscreen = 0
 # (bool) Automatically accept the Android SDK licenses
