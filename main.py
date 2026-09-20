@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 import sys
 import pickle
 import webbrowser
@@ -707,7 +706,7 @@ class TorusWindow(MDScreen):
         elif region == "SIM":
             region = "—имферополь"
 
-        # ─── Читаем CSV через встроенный csv (без pandas) ───
+        # ─── Читаем CSV через встроенный csv ───
         rows = []
         with open(path, "r", encoding="MacCyrillic", newline="") as f:
             reader = csv.DictReader(f, delimiter=";")
