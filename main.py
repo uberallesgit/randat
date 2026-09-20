@@ -22,11 +22,28 @@ from kivymd.uix.list import ILeftBodyTouch, OneLineAvatarIconListItem
 from kivymd.uix.toolbar import MDTopAppBar  # noqa
 from kivy.properties import BooleanProperty
 from kivymd.uix.dropdownitem import MDDropDownItem
+from kivy.uix.textinput import TextInput
+
 import os
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
 os.environ['KIVY_GLES_LIMITS'] = '0'
 os.environ['KIVY_NO_ARGS'] = '1'
+
+class SelectableLabel(TextInput):
+    """TextInput для чтения: работает встроенный скролл, выделение и копирование."""
+    def __init__(self, **kwargs):
+        kwargs.setdefault('readonly', True)
+        kwargs.setdefault('multiline', True)
+        kwargs.setdefault('focus', False)
+        kwargs.setdefault('background_normal', '')
+        kwargs.setdefault('background_active', '')
+        kwargs.setdefault('background_color', (0, 0, 0, 0))
+        kwargs.setdefault('foreground_color', (0.25, 0.28, 0.33, 1))
+        kwargs.setdefault('cursor_color', (0, 0, 0, 0))
+        kwargs.setdefault('use_bubble', True)
+        kwargs.setdefault('use_handles', True)
+        super().__init__(**kwargs)
 
 class MyTab(MDBoxLayout, MDTabsBase):
     """Класс для вкладки MDTabs."""
