@@ -690,8 +690,12 @@ class TorusWindow(MDScreen):
     def torus_again(self):
         self.show_dialog("Еще в разработке")
 
+    import csv
 
-    def torus_procedure(self,region,path):
+    import csv
+
+    def torus_procedure(self, region, path):
+        # ─── Оригинальные значения регионов (под MacCyrillic-кодировку CSV) ───
         if region == "FEO":
             region = "‘еодоси€"
         elif region == "EVP":
@@ -703,65 +707,78 @@ class TorusWindow(MDScreen):
         elif region == "SIM":
             region = "—имферополь"
 
-        df = pd.read_csv(path, engine='python', delimiter=';',
-                         encoding='MacCyrillic')  # encoding='MacCyrillic' ,encoding='iso-8859-1'
-        # encoding_errors='replace', engine='python', on_bad_lines='skip'
-        # encoding='iso-8859-1' , encoding='windows-1252', encoding='utf-8',encoding='utf-8-sig'
-        # delimiter=';'
-        # low_memory=False
-        # writefile = codecs.open(path, 'w', 'utf-8')
-        ######################################################################################
+        # ─── Читаем CSV через встроенный csv (без pandas) ───
+        rows = []
+        with open(path, "r", encoding="MacCyrillic", newline="") as f:
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                rows.append(row)
 
+        # ─── Помощники для приведения типов ───
+        def to_float(s):
+            try:
+                return float(str(s).replace(",", ".").replace('"', '').strip())
+            except (ValueError, TypeError):
+                return None
 
-        # 1. Создаем DataFrame и сразу приводим типы данных к корректным
-        data = pd.DataFrame(df, columns=[
-            'RECDATE', 'Subregion', 'vCELL',
-            'Cell Avail 2G (%)', 'Cell Avail 3G (%)', 'Cell Avail 4G (%)',
-            'OnAir_2G', 'OnAir_3G', 'OnAir_4G'
-        ])
+        def to_int(s):
+            try:
+                return int(str(s).strip())
+            except (ValueError, TypeError):
+                return None
 
-        # Оставляем только дату (без времени)
-        data['RECDATE'] = data['RECDATE'].astype(str).str.split().str[0]
+        # ─── Фильтруем по региону и приводим типы ───
+        region_rows = []
+        for row in rows:
+            if row.get('Subregion', '').strip() != region:
+                continue
+            recdate = str(row.get('RECDATE', '')).split()[0] if row.get('RECDATE') else ''
+            region_rows.append({
+                'RECDATE': recdate,
+                'vCELL': str(row.get('vCELL', '')).strip(),
+                'avail_2g': to_float(row.get('Cell Avail 2G (%)')),
+                'avail_3g': to_float(row.get('Cell Avail 3G (%)')),
+                'avail_4g': to_float(row.get('Cell Avail 4G (%)')),
+                'onair_2g': to_int(row.get('OnAir_2G')),
+                'onair_3g': to_int(row.get('OnAir_3G')),
+                'onair_4g': to_int(row.get('OnAir_4G')),
+            })
 
-        # Очищаем текстовые проценты (заменяем "," на ".") и переводим в числа для всех технологий разом
-        tech_columns = ['Cell Avail 2G (%)', 'Cell Avail 3G (%)', 'Cell Avail 4G (%)']
-        for col in tech_columns:
-            data[col] = data[col].astype(str).str.replace(',', '.', regex=False).astype(float)
+        # ─── Проблемные соты: avail < 100 и OnAir == 1, сортировка по возрастанию ───
+        def bad_cells(tech_key, onair_key):
+            filtered = [
+                r for r in region_rows
+                if r['onair_' + onair_key] == 1
+                   and r[tech_key] is not None
+                   and r[tech_key] < 100
+            ]
+            filtered.sort(key=lambda r: r[tech_key])
+            return filtered
 
-        # 2. Фильтруем данные по нужному региону
-        region_data = data[data['Subregion'] == region]
+        # ─── Уникальные БС (без CR3 и CR4) ───
+        bs_set = set()
+        for r in region_rows:
+            vcell = r['vCELL']
+            if vcell.startswith('CR3') or vcell.startswith('CR4'):
+                continue
+            bs_set.add(vcell[:6])
+        bs_quan = len(bs_set)
 
-        # 3. Считаем средние показатели (только для работающих базовых станций OnAir == 1)
-        gsm_average = region_data[region_data['OnAir_2G'] == 1]['Cell Avail 2G (%)'].mean().round(3)
-        umts_average = region_data[region_data['OnAir_3G'] == 1]['Cell Avail 3G (%)'].mean().round(3)
-        lte_average = region_data[region_data['OnAir_4G'] == 1]['Cell Avail 4G (%)'].mean().round(3)
+        # ─── Формируем текстовые таблицы (аналог df.to_string(index=False)) ───
+        def build_table(cells, tech_key):
+            if not cells:
+                return "(нет проблемных сот)"
+            header = f"{'RECDATE':<12} {'vCELL':<12} {'Avail %':>10}"
+            lines = [header, "-" * len(header)]
+            for r in cells:
+                lines.append(f"{r['RECDATE']:<12} {r['vCELL']:<12} {r[tech_key]:>10.3f}")
+            return "\n".join(lines)
 
-        # 4. Выделяем проблемные соты (где доступность меньше 100% и они OnAir)
-        # Теперь, когда типы данных — float, сравнение с 100 (или 100.0) сработает верно
-        # Выделяем проблемные соты и сортируем их ПО ВОЗРАСТАНИЮ ПРОЦЕНТА ДОСТУПНОСТИ
-        gsm_table = region_data[
-            (region_data['Cell Avail 2G (%)'] < 100) & (region_data['OnAir_2G'] == 1)
-            ][['RECDATE', 'vCELL', 'Cell Avail 2G (%)']].sort_values(by='Cell Avail 2G (%)', ascending=True)
+        gsm_table = build_table(bad_cells('avail_2g', '2g'), 'avail_2g')
+        umts_table = build_table(bad_cells('avail_3g', '3g'), 'avail_3g')
+        lte_table = build_table(bad_cells('avail_4g', '4g'), 'avail_4g')
 
-        umts_table = region_data[
-            (region_data['Cell Avail 3G (%)'] < 100) & (region_data['OnAir_3G'] == 1)
-            ][['RECDATE', 'vCELL', 'Cell Avail 3G (%)']].sort_values(by='Cell Avail 3G (%)', ascending=True)
-
-        lte_table = region_data[
-            (region_data['Cell Avail 4G (%)'] < 100) & (region_data['OnAir_4G'] == 1)
-            ][['RECDATE', 'vCELL', 'Cell Avail 4G (%)']].sort_values(by='Cell Avail 4G (%)', ascending=True)
-
-        # 5. Считаем уникальное количество Базовых Станций (BS quantity)
-        # Исключаем соты, начинающиеся на CR3 и CR4
-        bs_quan = region_data[
-                      (~region_data['vCELL'].astype(str).str.startswith('CR3')) &
-                      (~region_data['vCELL'].astype(str).str.startswith('CR4'))
-                      ]['vCELL'].str[:6].nunique()
-
-        gsm_table = gsm_table.to_string(index=False)
-        umts_table = umts_table.to_string(index=False)
-        lte_table = lte_table.to_string(index=False)
-        return bs_quan,gsm_table,umts_table,lte_table
+        return bs_quan, gsm_table, umts_table, lte_table
 
     def select_path(self, path):
         self.exit_file_manager()
@@ -784,6 +801,7 @@ class TorusWindow(MDScreen):
 
         self.manager.current = 'NetworkTabsWindow'
         self.manager.transition.direction = 'left'
+
 
 
 # ────────────────────────────────────────────────────────────────
