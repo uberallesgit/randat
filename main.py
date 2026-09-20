@@ -22,6 +22,11 @@ from kivymd.uix.toolbar import MDTopAppBar  # noqa
 from kivy.properties import BooleanProperty
 from kivymd.uix.dropdownitem import MDDropDownItem
 
+os.environ['KIVY_GL_BACKEND'] = 'sdl2'
+os.environ['KIVY_GRAPHICS'] = 'gles'
+os.environ['KIVY_GLES_LIMITS'] = '0'
+os.environ['KIVY_NO_ARGS'] = '1'
+
 class MyTab(MDBoxLayout, MDTabsBase):
     """Класс для вкладки MDTabs."""
     pass
