@@ -15,6 +15,8 @@ requirements = python3,kivy==2.3.0,kivymd==1.1.1,pillow,openpyxl,et-xmlfile,cyth
 
 orientation = portrait
 fullscreen = 0
+# (bool) Automatically accept the Android SDK licenses
+android.accept_sdk_license = True
 
 # Исправленные разрешения для API 33
 android.permissions = INTERNET, READ_MEDIA_IMAGES
