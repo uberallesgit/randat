@@ -25,11 +25,14 @@ from kivymd.uix.dropdownitem import MDDropDownItem
 from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
 from kivymd.uix.list import MDList, OneLineListItem
+from kivy.uix.filechooser import FileChooserIconView, FileChooserListView
 
 from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.label import Label
+from kivy.uix.filechooser import FileChooserIconView, FileChooserIconLayout
 
 
 import os
@@ -37,6 +40,9 @@ os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
 os.environ['KIVY_GLES_LIMITS'] = '0'
 os.environ['KIVY_NO_ARGS'] = '1'
+
+TEXT_COLOR = (0.25, 0.28, 0.33, 1)
+
 
 class SelectableLabel(TextInput):
     """TextInput для чтения: работает встроенный скролл, выделение и копирование."""
@@ -125,17 +131,7 @@ class GoorandaWindow(MDScreen):
             webbrowser.open(route)
 
     def show_dialog(self, text, title="Внимание"):
-        if not self.dialog:
-            self.dialog = MDDialog(
-                title=title,
-                text=text,
-                buttons=[MDFlatButton(text="OK",
-                                      on_release=lambda x: self.dialog.dismiss())],
-            )
-        else:
-            self.dialog.title = title
-            self.dialog.text = text
-        self.dialog.open()
+        show_simple_dialog(title, text)
 
     # ── Формирование текста ──
     def make_output_short(self, bs, RDB):
@@ -344,18 +340,8 @@ class UberWindow(MDScreen):
             self.ids.respo_worker.text = ""
 
     # ── Диалог ──
-    def show_dialog(self, text, title="Не хватает данных"):
-        if not self.dialog:
-            self.dialog = MDDialog(
-                title=title,
-                text=text,
-                buttons=[MDFlatButton(text="OK",
-                                      on_release=lambda x: self.dialog.dismiss())],
-            )
-        else:
-            self.dialog.title = title
-            self.dialog.text = text
-        self.dialog.open()
+    def show_dialog(self, text, title="Внимание"):
+        show_simple_dialog(title, text)
 
     # ── Очистки ──
     def clear_description(self):
@@ -580,18 +566,7 @@ class SettingsWindow(MDScreen):
         self.file_manager = None
 
     def open_file_manager(self):
-        from kivymd.uix.filemanager import MDFileManager
-        downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
-        if not os.path.exists(downloads):
-            downloads = os.path.expanduser('~')
-
-        self.file_manager = MDFileManager(
-            exit_manager=self.exit_file_manager,
-            select_path=self.select_path,
-            preview=False,
-            ext=[".xls", ".xlsx", ".csv"],
-        )
-        self.file_manager.show(downloads)
+        open_file_chooser(self.select_path, ext=[".xls", ".xlsx", ".csv"])
 
     def exit_file_manager(self, *_):
         if self.file_manager:
@@ -605,16 +580,7 @@ class SettingsWindow(MDScreen):
             self.show_dialog("Выбран некорректный формат файла!")
 
     def show_dialog(self, text, title="Внимание"):
-        if not self.dialog:
-            self.dialog = MDDialog(
-                title=title, text=text,
-                buttons=[MDFlatButton(text="OK",
-                                      on_release=lambda x: self.dialog.dismiss())],
-            )
-        else:
-            self.dialog.title = title
-            self.dialog.text = text
-        self.dialog.open()
+        show_simple_dialog(title, text)
 
     def rdb_update(self, chosen_file):
         bs_list, bs_sorted, bs_dict = [], [], {}
@@ -687,18 +653,7 @@ class TorusWindow(MDScreen):
         self.file_manager = None
 
     def open_file_manager(self):
-        from kivymd.uix.filemanager import MDFileManager
-        downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
-        if not os.path.exists(downloads):
-            downloads = os.path.expanduser('~')
-
-        self.file_manager = MDFileManager(
-            exit_manager=self.exit_file_manager,
-            select_path=self.select_path,
-            preview=False,
-            ext=[".xls", ".xlsx", ".csv"],
-        )
-        self.file_manager.show(downloads)
+        open_file_chooser(self.select_path, ext=[".xls", ".xlsx", ".csv"])
 
     def exit_file_manager(self, *_):
         if self.file_manager:
@@ -925,11 +880,6 @@ class UberGoorandaApp(MDApp):
     # ── Универсальное открытие меню по имени поля ──
     def open_menu(self, caller, options, on_select=None):
         """Простой Popup со списком кнопок (замена MDDropdownMenu для Adreno)."""
-        from kivy.uix.popup import Popup
-        from kivy.uix.boxlayout import BoxLayout
-        from kivy.uix.button import Button
-        from kivy.uix.scrollview import ScrollView
-        from kivy.metrics import dp
 
         # Прокручиваемый список кнопок
         content = BoxLayout(
@@ -1010,6 +960,176 @@ class UberGoorandaApp(MDApp):
         self.open_menu(caller, self.WORK_DESC_OPTIONS)
 
     # _set_mode — УДАЛИТЬ полностью
+
+def show_simple_dialog(title, text):
+    """Простой Popup вместо MDDialog — работает на Adreno 610."""
+    from kivy.uix.popup import Popup
+    from kivy.uix.boxlayout import BoxLayout
+    from kivy.uix.label import Label
+    from kivy.uix.button import Button
+    from kivy.uix.scrollview import ScrollView
+    from kivy.metrics import dp
+
+    content = BoxLayout(
+        orientation="vertical",
+        spacing=dp(10),
+        padding=[dp(12), dp(12), dp(12), dp(12)],
+    )
+
+    # Текст с прокруткой (если длинный)
+    scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+    msg = Label(
+        text=text,
+        halign="left",
+        valign="top",
+        color=(0, 0, 0, 1),
+        font_size=dp(14),
+        size_hint_y=None,
+        markup=True,
+    )
+    msg.bind(
+        width=lambda inst, w: setattr(inst, "text_size", (w, None)),
+        texture_size=lambda inst, ts: setattr(inst, "height", ts[1]),
+    )
+    scroll.add_widget(msg)
+    content.add_widget(scroll)
+
+    btn = Button(
+        text="OK",
+        size_hint_y=None,
+        height=dp(48),
+        background_normal="",
+        background_down="",
+        background_color=(0.2, 0.6, 1, 1),
+        color=(1, 1, 1, 1),
+        font_size=dp(16),
+        bold=True,
+    )
+    content.add_widget(btn)
+
+    popup = Popup(
+        title=title,
+        title_color=(0, 0, 0, 1),
+        title_size=dp(16),
+        separator_color=(0.85, 0.85, 0.85, 1),
+        content=content,
+        size_hint=(0.85, 0.55),
+        background="",
+        background_color=(1, 1, 1, 1),
+        auto_dismiss=True,
+    )
+
+    btn.bind(on_release=popup.dismiss)
+    popup.open()
+
+def open_file_chooser(on_select, ext=None, start_path=None):
+    """Простой файловый менеджер (список) с тёмным текстом на белом фоне."""
+    from kivy.uix.popup import Popup
+    from kivy.uix.boxlayout import BoxLayout
+    from kivy.uix.button import Button
+    from kivy.uix.label import Label
+    from kivy.uix.filechooser import FileChooserListView
+    from kivy.metrics import dp
+    from kivy.clock import Clock
+    import os
+
+    if not start_path:
+        candidates = [
+            "/storage/emulated/0/Download",
+            "/storage/emulated/0/Downloads",
+            "/sdcard/Download",
+            "/sdcard/Downloads",
+            os.path.expanduser("~/Downloads"),
+            os.path.expanduser("~"),
+            "/storage/emulated/0",
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                start_path = c
+                break
+        else:
+            start_path = "/"
+
+    filters = []
+    if ext:
+        filters.append(lambda folder, filename: (
+            os.path.isdir(os.path.join(folder, filename)) or
+            filename.lower().endswith(tuple(ext))
+        ))
+
+    chooser = FileChooserListView(
+        path=start_path,
+        filters=filters if filters else None,
+    )
+
+    def _apply_dark_colors(*_):
+        for child in chooser.walk():
+            if isinstance(child, Label):
+                child.color = TEXT_COLOR
+                child.font_size = dp(14)
+            if hasattr(child, 'foreground_color'):
+                child.foreground_color = TEXT_COLOR
+            if hasattr(child, 'disabled_color'):
+                child.disabled_color = (0.5, 0.5, 0.5, 1)  # серый для disabled
+
+    Clock.schedule_once(_apply_dark_colors, 0.1)
+    Clock.schedule_once(_apply_dark_colors, 0.5)
+    Clock.schedule_once(_apply_dark_colors, 1.0)
+    chooser.bind(path=lambda *_: Clock.schedule_once(_apply_dark_colors, 0.2))
+    chooser.bind(files=lambda *_: Clock.schedule_once(_apply_dark_colors, 0.2))
+
+    buttons = BoxLayout(
+        orientation="horizontal",
+        size_hint_y=None,
+        height=dp(48),
+        spacing=dp(8),
+        padding=[dp(8), 0, dp(8), 0],
+    )
+
+    popup = Popup(
+        title="Выберите файл",
+        title_color=(0.25, 0.28, 0.33, 1),
+        title_size=dp(16),
+        separator_color=(0.85, 0.85, 0.85, 1),
+        content=BoxLayout(orientation="vertical", spacing=dp(4), padding=dp(4)),
+        size_hint=(0.95, 0.85),
+        background="",
+        background_color=(1, 1, 1, 1),
+        auto_dismiss=True,
+    )
+
+    def _choose(*_):
+        sel = chooser.selection
+        if sel:
+            popup.dismiss()
+            on_select(sel[0])
+
+    def _cancel(*_):
+        popup.dismiss()
+
+    btn_ok = Button(
+        text="ВЫБРАТЬ",
+        background_normal="",
+        background_color=(0.2, 0.6, 1, 1),
+        color=(1, 1, 1, 1),
+        bold=True,
+    )
+    btn_ok.bind(on_release=_choose)
+
+    btn_cancel = Button(
+        text="ОТМЕНА",
+        background_normal="",
+        background_color=(0.9, 0.3, 0.3, 1),
+        color=(1, 1, 1, 1),
+        bold=True,
+    )
+    btn_cancel.bind(on_release=_cancel)
+
+    buttons.add_widget(btn_ok)
+    buttons.add_widget(btn_cancel)
+    popup.content.add_widget(chooser)
+    popup.content.add_widget(buttons)
+    popup.open()
 
 
 if __name__ == '__main__':
