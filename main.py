@@ -26,6 +26,12 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
 from kivymd.uix.list import MDList, OneLineListItem
 
+from kivy.uix.popup import Popup
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.scrollview import ScrollView
+
+
 import os
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
@@ -918,29 +924,58 @@ class UberGoorandaApp(MDApp):
 
     # ── Универсальное открытие меню по имени поля ──
     def open_menu(self, caller, options, on_select=None):
-        list_content = MDList()
+        """Простой Popup со списком кнопок (замена MDDropdownMenu для Adreno)."""
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.scrollview import ScrollView
+        from kivy.metrics import dp
+
+        # Прокручиваемый список кнопок
+        content = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            spacing=dp(2),
+            padding=[dp(4), dp(4), dp(4), dp(4)],
+        )
+        content.bind(minimum_height=content.setter("height"))
+
+        scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        scroll.add_widget(content)
+
+        # Popup с фиксированным размером в процентах экрана
         popup = Popup(
-            title="",
-            separator_height=0,
-            content=list_content,
-            size_hint=(0.85, None),
-            height=min(len(options) * 52 + 30, 480),
+            title="Выберите",
+            title_color=(0, 0, 0, 1),
+            title_size=dp(16),
+            separator_color=(0.85, 0.85, 0.85, 1),
+            content=scroll,
+            size_hint=(0.8, 0.6),
             background="",
             background_color=(1, 1, 1, 1),
             auto_dismiss=True,
         )
 
-        def _on_select(value):
-            caller.text = value
+        def _sel(v):
+            caller.text = v
             if on_select:
-                on_select(value)
+                on_select(v)
             popup.dismiss()
 
         for opt in options:
-            list_content.add_widget(
-                OneLineListItem(text=opt,
-                                on_release=lambda x, v=opt: _on_select(v))
+            b = Button(
+                text=opt,
+                size_hint_y=None,
+                height=dp(52),
+                background_normal="",
+                background_down="",
+                background_color=(0.95, 0.95, 0.97, 1),
+                color=(0, 0, 0, 1),
+                font_size=dp(15),
             )
+            b.bind(on_release=lambda x, v=opt: _sel(v))
+            content.add_widget(b)
+
         popup.open()
 
     def open_mode_menu(self, caller):

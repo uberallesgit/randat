@@ -8,7 +8,7 @@
         orientation: "vertical"
         md_bg_color: 0.949, 0.949, 0.969, 1
 
-        # ── Шапка ──
+        # ── Шапка (замена MDTopAppBar) ──
         MDBoxLayout:
             orientation: "horizontal"
             size_hint_y: None
@@ -46,16 +46,24 @@
             padding: "12dp"
             spacing: "12dp"
 
-            # ── Карточка вывода ──
+            # ── Карточка вывода (замена MDCard) ──
             MDBoxLayout:
                 orientation: "vertical"
                 padding: "8dp"
                 size_hint_y: 0.55
                 md_bg_color: 1, 1, 1, 1
 
-                SelectableLabel:
+                TextInput:
                     id: output_text
                     text: ""
+                    markup: True
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
                     font_size: "15sp"
 
             MDBoxLayout:
@@ -211,9 +219,16 @@
                 size_hint_y: 0.85
                 md_bg_color: 1, 1, 1, 1
 
-                SelectableLabel:
+                TextInput:
                     id: crwo_text_output
                     text: ""
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
                     font_size: "15sp"
 
             MDBoxLayout:
@@ -620,24 +635,47 @@
             MyTab:
                 title: "GSM/DCS"
 
-                SelectableLabel:
+                TextInput:
                     id: gsm
                     text: ""
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "16sp"
 
             MyTab:
                 title: "UMTS"
 
-                SelectableLabel:
+                TextInput:
                     id: umts
                     text: ""
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "16sp"
 
             MyTab:
                 title: "LTE"
 
-                SelectableLabel:
+                TextInput:
                     id: lte
                     text: ""
-
+                    readonly: True
+                    multiline: True
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: 0.25, 0.28, 0.33, 1
+                    cursor_color: 0, 0, 0, 0
+                    font_size: "16sp"
 
         MDBoxLayout:
             size_hint_y: None
