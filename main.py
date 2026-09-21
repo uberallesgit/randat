@@ -651,6 +651,7 @@ class TorusWindow(MDScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.file_manager = None
+        self.last_path = ""  # ← запоминаем последний выбранный файл
 
     def open_file_manager(self):
         open_file_chooser(self.select_path, ext=[".xls", ".xlsx", ".csv"])
@@ -673,11 +674,17 @@ class TorusWindow(MDScreen):
         self.dialog.open()
 
     def torus_again(self):
-        self.show_dialog("Еще в разработке")
+        """Повторить обработку последнего файла с текущим регионом."""
+        if not self.last_path:
+            self.show_dialog("Сначала выберите файл через кнопку ВЫБРАТЬ ФАЙЛ")
+            return
+        import os
+        if not os.path.exists(self.last_path):
+            self.show_dialog("Последний файл не найден. Выберите его заново.")
+            return
+        # Повторяем то же, что при выборе файла, но с текущим регионом
+        self.select_path(self.last_path)
 
-    import csv
-
-    import csv
 
     def torus_procedure(self, region, path):
         # ─── Оригинальные значения регионов (под MacCyrillic-кодировку CSV) ───
@@ -766,6 +773,7 @@ class TorusWindow(MDScreen):
         return bs_quan, gsm_table, umts_table, lte_table
 
     def select_path(self, path):
+        self.last_path = path
         self.exit_file_manager()
         if not path.lower().endswith(('.xls', '.xlsx', '.csv')):
             print("Неверный формат файла")
