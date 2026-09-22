@@ -778,9 +778,8 @@ class TorusWindow(MDScreen):
 
     def select_path(self, path):
         self.last_path = path
-        self.exit_file_manager()
         if not path.lower().endswith(('.xls', '.xlsx', '.csv')):
-            print("Неверный формат файла")
+            show_simple_dialog("Внимание", "Неверный формат файла")
             return
         print(f"Выбран файл: {path}")
         path_to_file = path
@@ -1035,72 +1034,55 @@ def show_simple_dialog(title, text):
     popup.open()
 
 def open_file_chooser(on_select, ext=None, start_path=None):
-    """Простой файловый менеджер (список) с тёмным текстом на белом фоне."""
-    """Открывает системный файловый менеджер (Android) или простой проводник (десктоп)."""
+    """Файловый менеджер: системный (Android) или FileChooserListView (десктоп)."""
+    import platform
+    import os
 
-
-    # --- Логика для Android ---
+    # ─── Android: системный файловый менеджер ───
     if platform.system() == 'Android':
-        # 1. Создаем "слушателя", который будет ждать выбора файла
+        from androidstorage4kivy import Chooser, SharedStorage
+
         def chooser_callback(shared_file_list):
             if not shared_file_list:
                 return
-
-            # 2. Копируем выбранный файл во внутреннюю папку приложения
             ss = SharedStorage()
             private_file_path = ss.copy_from_shared(shared_file_list[0])
-
-            # 3. Передаем путь к этому "приватному" файлу в вашу основную логику
             if private_file_path:
                 on_select(private_file_path)
 
-        # 4. Создаем и открываем системный файловый менеджер
         chooser = Chooser(chooser_callback)
+        # Показываем ВСЕ файлы — фильтр по MIME на Android часто блокирует
+        # .xlsx и .csv. Проверка расширения — в select_path.
+        chooser.choose_content("*/*")
+        return
 
-        # 5. Указываем, какие файлы показывать: если переданы расширения (ext),
-        #    фильтруем по ним, иначе показываем все.
-        mime_type = "*/*"
-        if ext:
-            # Преобразуем список расширений в MIME-типы
-            mime_types = []
-            for e in ext:
-                if e.lower() in ['.xls', '.xlsx']:
-                    mime_types.append('application/vnd.ms-excel')
-                elif e.lower() == '.csv':
-                    mime_types.append('text/csv')
-            if mime_types:
-                # Если несколько типов, объединяем их в строку
-                mime_type = ", ".join(mime_types) if len(mime_types) > 1 else mime_types[0]
+    # ─── Windows / Linux: FileChooserListView в Popup ───
+    from kivy.uix.popup import Popup
+    from kivy.uix.boxlayout import BoxLayout
+    from kivy.uix.button import Button
+    from kivy.uix.label import Label
+    from kivy.uix.filechooser import FileChooserListView
+    from kivy.metrics import dp
+    from kivy.clock import Clock
 
-        chooser.choose_content(mime_type)
+    if not start_path:
+        candidates = [
+            os.path.expanduser("~/Downloads"),
+            os.path.expanduser("~"),
+            "/",
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                start_path = c
+                break
+        else:
+            start_path = "/"
 
-    # --- Логика для Windows / Linux (остается без изменений) ---
-    else:
-        if not start_path:
-            candidates = [
-                "/storage/emulated/0/Download",
-                "/storage/emulated/0/Downloads",
-                "/sdcard/Download",
-                "/sdcard/Downloads",
-                os.path.expanduser("~/Downloads"),
-                os.path.expanduser("~"),
-                "/storage/emulated/0",
-            ]
-            for c in candidates:
-                if os.path.exists(c):
-                    start_path = c
-                    break
-            else:
-                start_path = "/"
+    chooser = FileChooserListView(path=start_path)
 
-        # ФИЛЬТР УБРАН — показываем все файлы
-        chooser = FileChooserListView(
-            path=start_path,
-        )
+    TEXT_COLOR = (0.25, 0.28, 0.33, 1)
 
-        # Тёмно-серый цвет текста
-        TEXT_COLOR = (0.25, 0.28, 0.33, 1)
-
+    # ── Тёмно-серый цвет для всех Label внутри chooser ──
     def _apply_dark_colors(*_):
         for child in chooser.walk():
             if isinstance(child, Label):
@@ -1117,24 +1099,13 @@ def open_file_chooser(on_select, ext=None, start_path=None):
     chooser.bind(path=lambda *_: Clock.schedule_once(_apply_dark_colors, 0.2))
     chooser.bind(files=lambda *_: Clock.schedule_once(_apply_dark_colors, 0.2))
 
+    # ── Нижние кнопки ──
     buttons = BoxLayout(
         orientation="horizontal",
         size_hint_y=None,
         height=dp(48),
         spacing=dp(8),
         padding=[dp(8), 0, dp(8), 0],
-    )
-
-    popup = Popup(
-        title="Выберите файл",
-        title_color=TEXT_COLOR,
-        title_size=dp(16),
-        separator_color=(0.85, 0.85, 0.85, 1),
-        content=BoxLayout(orientation="vertical", spacing=dp(4), padding=dp(4)),
-        size_hint=(0.95, 0.85),
-        background="",
-        background_color=(1, 1, 1, 1),
-        auto_dismiss=True,
     )
 
     def _choose(*_):
@@ -1166,8 +1137,28 @@ def open_file_chooser(on_select, ext=None, start_path=None):
 
     buttons.add_widget(btn_ok)
     buttons.add_widget(btn_cancel)
-    popup.content.add_widget(chooser)
-    popup.content.add_widget(buttons)
+
+    # ── Отвязываем chooser, если он уже где-то был ──
+    if chooser.parent:
+        chooser.parent.remove_widget(chooser)
+
+    # ── Собираем контент в отдельный BoxLayout ДО создания Popup ──
+    root_box = BoxLayout(orientation="vertical", spacing=dp(4), padding=dp(4))
+    root_box.add_widget(chooser)
+    root_box.add_widget(buttons)
+
+    popup = Popup(
+        title="Выберите файл",
+        title_color=TEXT_COLOR,
+        title_size=dp(16),
+        separator_color=(0.85, 0.85, 0.85, 1),
+        content=root_box,
+        size_hint=(0.95, 0.85),
+        background="",
+        background_color=(1, 1, 1, 1),
+        auto_dismiss=True,
+    )
+
     popup.open()
 
 
