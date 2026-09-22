@@ -651,6 +651,7 @@ class TorusWindow(MDScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.file_manager = None
+        self.dialog = None  # ← добавил
         self.last_path = ""  # ← запоминаем последний выбранный файл
 
     def open_file_manager(self):
@@ -660,29 +661,25 @@ class TorusWindow(MDScreen):
         if self.file_manager:
             self.file_manager.close()
 
-    def show_dialog(self, text, title="ВНИМАНИЕ!"):
-        if not self.dialog:
-            self.dialog = MDDialog(
-                title=title,
-                text=text,
-                buttons=[MDFlatButton(text="OK",
-                                      on_release=lambda x: self.dialog.dismiss())],
-            )
-        else:
-            self.dialog.title = title
-            self.dialog.text = text
-        self.dialog.open()
+    def show_dialog(self, text, title="Внимание"):
+        show_simple_dialog(title, text)
 
-    def torus_again(self):
+
+    def torus_again(self, *_):
         """Повторить обработку последнего файла с текущим регионом."""
         if not self.last_path:
-            self.show_dialog("Сначала выберите файл через кнопку ВЫБРАТЬ ФАЙЛ")
+            show_simple_dialog(
+                "Внимание",
+                "Сначала выберите файл через кнопку ВЫБРАТЬ ФАЙЛ",
+            )
             return
         import os
         if not os.path.exists(self.last_path):
-            self.show_dialog("Последний файл не найден. Выберите его заново.")
+            show_simple_dialog(
+                "Внимание",
+                "Последний файл не найден. Выберите его заново.",
+            )
             return
-        # Повторяем то же, что при выборе файла, но с текущим регионом
         self.select_path(self.last_path)
 
 
@@ -1058,17 +1055,13 @@ def open_file_chooser(on_select, ext=None, start_path=None):
         else:
             start_path = "/"
 
-    filters = []
-    if ext:
-        filters.append(lambda folder, filename: (
-            os.path.isdir(os.path.join(folder, filename)) or
-            filename.lower().endswith(tuple(ext))
-        ))
-
+    # ФИЛЬТР УБРАН — показываем все файлы
     chooser = FileChooserListView(
         path=start_path,
-        filters=filters if filters else None,
     )
+
+    # Тёмно-серый цвет текста
+    TEXT_COLOR = (0.25, 0.28, 0.33, 1)
 
     def _apply_dark_colors(*_):
         for child in chooser.walk():
@@ -1078,7 +1071,7 @@ def open_file_chooser(on_select, ext=None, start_path=None):
             if hasattr(child, 'foreground_color'):
                 child.foreground_color = TEXT_COLOR
             if hasattr(child, 'disabled_color'):
-                child.disabled_color = (0.5, 0.5, 0.5, 1)  # серый для disabled
+                child.disabled_color = (0.5, 0.5, 0.5, 1)
 
     Clock.schedule_once(_apply_dark_colors, 0.1)
     Clock.schedule_once(_apply_dark_colors, 0.5)
@@ -1096,7 +1089,7 @@ def open_file_chooser(on_select, ext=None, start_path=None):
 
     popup = Popup(
         title="Выберите файл",
-        title_color=(0.25, 0.28, 0.33, 1),
+        title_color=TEXT_COLOR,
         title_size=dp(16),
         separator_color=(0.85, 0.85, 0.85, 1),
         content=BoxLayout(orientation="vertical", spacing=dp(4), padding=dp(4)),
