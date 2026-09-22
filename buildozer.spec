@@ -11,14 +11,14 @@ source.include_patterns = service/*
 version = 1.0
 
 # Требования зафиксированы правильно
-requirements = python3, cython==3.0.11, kivy==2.3.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile
+requirements = python3, cython==3.0.11, kivy==2.3.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, androidstorage4kivy
 orientation = portrait
 fullscreen = 0
 # (bool) Automatically accept the Android SDK licenses
 android.accept_sdk_license = True
 
 # Исправленные разрешения для API 33
-android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
+android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO
 
 android.api = 33
 android.minapi = 21

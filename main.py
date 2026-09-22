@@ -27,11 +27,18 @@ from kivy.uix.popup import Popup
 from kivymd.uix.list import MDList, OneLineListItem
 from kivy.uix.filechooser import FileChooserIconView, FileChooserListView
 
+import platform
+IS_ANDROID = platform.system() == 'Android'
+# Импортируем androidstorage4kivy только на Android
+if IS_ANDROID:
+    from androidstorage4kivy import Chooser, SharedStorage
+
 from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
+from kivy.clock import Clock
 from kivy.uix.filechooser import FileChooserIconView, FileChooserIconLayout
 
 
@@ -1029,39 +1036,70 @@ def show_simple_dialog(title, text):
 
 def open_file_chooser(on_select, ext=None, start_path=None):
     """Простой файловый менеджер (список) с тёмным текстом на белом фоне."""
-    from kivy.uix.popup import Popup
-    from kivy.uix.boxlayout import BoxLayout
-    from kivy.uix.button import Button
-    from kivy.uix.label import Label
-    from kivy.uix.filechooser import FileChooserListView
-    from kivy.metrics import dp
-    from kivy.clock import Clock
-    import os
+    """Открывает системный файловый менеджер (Android) или простой проводник (десктоп)."""
 
-    if not start_path:
-        candidates = [
-            "/storage/emulated/0/Download",
-            "/storage/emulated/0/Downloads",
-            "/sdcard/Download",
-            "/sdcard/Downloads",
-            os.path.expanduser("~/Downloads"),
-            os.path.expanduser("~"),
-            "/storage/emulated/0",
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                start_path = c
-                break
-        else:
-            start_path = "/"
 
-    # ФИЛЬТР УБРАН — показываем все файлы
-    chooser = FileChooserListView(
-        path=start_path,
-    )
+    # --- Логика для Android ---
+    if platform.system() == 'Android':
+        # 1. Создаем "слушателя", который будет ждать выбора файла
+        def chooser_callback(shared_file_list):
+            if not shared_file_list:
+                return
 
-    # Тёмно-серый цвет текста
-    TEXT_COLOR = (0.25, 0.28, 0.33, 1)
+            # 2. Копируем выбранный файл во внутреннюю папку приложения
+            ss = SharedStorage()
+            private_file_path = ss.copy_from_shared(shared_file_list[0])
+
+            # 3. Передаем путь к этому "приватному" файлу в вашу основную логику
+            if private_file_path:
+                on_select(private_file_path)
+
+        # 4. Создаем и открываем системный файловый менеджер
+        chooser = Chooser(chooser_callback)
+
+        # 5. Указываем, какие файлы показывать: если переданы расширения (ext),
+        #    фильтруем по ним, иначе показываем все.
+        mime_type = "*/*"
+        if ext:
+            # Преобразуем список расширений в MIME-типы
+            mime_types = []
+            for e in ext:
+                if e.lower() in ['.xls', '.xlsx']:
+                    mime_types.append('application/vnd.ms-excel')
+                elif e.lower() == '.csv':
+                    mime_types.append('text/csv')
+            if mime_types:
+                # Если несколько типов, объединяем их в строку
+                mime_type = ", ".join(mime_types) if len(mime_types) > 1 else mime_types[0]
+
+        chooser.choose_content(mime_type)
+
+    # --- Логика для Windows / Linux (остается без изменений) ---
+    else:
+        if not start_path:
+            candidates = [
+                "/storage/emulated/0/Download",
+                "/storage/emulated/0/Downloads",
+                "/sdcard/Download",
+                "/sdcard/Downloads",
+                os.path.expanduser("~/Downloads"),
+                os.path.expanduser("~"),
+                "/storage/emulated/0",
+            ]
+            for c in candidates:
+                if os.path.exists(c):
+                    start_path = c
+                    break
+            else:
+                start_path = "/"
+
+        # ФИЛЬТР УБРАН — показываем все файлы
+        chooser = FileChooserListView(
+            path=start_path,
+        )
+
+        # Тёмно-серый цвет текста
+        TEXT_COLOR = (0.25, 0.28, 0.33, 1)
 
     def _apply_dark_colors(*_):
         for child in chooser.walk():
