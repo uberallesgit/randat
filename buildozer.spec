@@ -18,7 +18,7 @@ fullscreen = 0
 android.accept_sdk_license = True
 
 # Исправленные разрешения для API 33
-android.permissions = INTERNET, READ_MEDIA_IMAGES
+android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
 
 android.api = 33
 android.minapi = 21
