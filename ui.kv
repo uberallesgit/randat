@@ -196,7 +196,7 @@
 
                 MDTextField:
                     id: bs_name
-                    hint_text: "Номер БС / ARC"
+                    hint_text: "Номер БС "
                     mode: "rectangle"
                     text_validate_unfocus: False
                     on_text_validate: root.make_output()
@@ -642,7 +642,13 @@
             size_hint_y: None
             height: SIZE_BAR
             padding: SPACE_XS, 0
-            md_background_color: COLOR_HEADER
+
+            canvas.before:
+                Color:
+                    rgba: COLOR_HEADER
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
 
             MDIconButton:
                 icon: "arrow-left"
