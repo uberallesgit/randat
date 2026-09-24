@@ -8,34 +8,33 @@ from datetime import datetime, timedelta
 import openpyxl
 from kivy.lang import Builder
 from kivy.core.clipboard import Clipboard
-from kivy.properties import StringProperty, ListProperty, BooleanProperty
-from kivy.metrics import dp
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.screenmanager import MDScreenManager
-from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDRaisedButton
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.tab import MDTabsBase
 from kivymd.uix.list import ILeftBodyTouch, OneLineAvatarIconListItem
-from kivymd.uix.toolbar import MDTopAppBar  # noqa
-from kivy.properties import BooleanProperty
+from kivymd.uix.toolbar import MDTopAppBar
 from kivymd.uix.dropdownitem import MDDropDownItem
 from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
 from kivymd.uix.list import MDList, OneLineListItem
 from kivy.uix.filechooser import FileChooserIconView, FileChooserListView
+from kivy.properties import StringProperty, ListProperty, BooleanProperty
+from kivy.uix.behaviors import ButtonBehavior
+from kivy.uix.boxlayout import BoxLayout
+from kivy.graphics import Color, RoundedRectangle
+from kivy.metrics import dp
+from kivy.core.window import Window
 
 import platform
 IS_ANDROID = platform.system() == 'Android'
 # Импортируем androidstorage4kivy только на Android
 if IS_ANDROID:
     from androidstorage4kivy import Chooser, SharedStorage
-
 from kivy.uix.popup import Popup
-from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
@@ -52,20 +51,35 @@ os.environ['KIVY_NO_ARGS'] = '1'
 TEXT_COLOR = (0.25, 0.28, 0.33, 1)
 
 
+
 class SelectableLabel(TextInput):
-    """TextInput для чтения: работает встроенный скролл, выделение и копирование."""
+    """TextInput readonly: скроллится, выделяется, но не открывает клавиатуру."""
     def __init__(self, **kwargs):
         kwargs.setdefault('readonly', True)
         kwargs.setdefault('multiline', True)
-        kwargs.setdefault('focus', False)
         kwargs.setdefault('background_normal', '')
         kwargs.setdefault('background_active', '')
         kwargs.setdefault('background_color', (0, 0, 0, 0))
         kwargs.setdefault('foreground_color', (0.25, 0.28, 0.33, 1))
         kwargs.setdefault('cursor_color', (0, 0, 0, 0))
         kwargs.setdefault('use_bubble', True)
-        kwargs.setdefault('use_handles', True)
+        kwargs.setdefault('use_handles', False)
+        # scroll_from_swipe=True по умолчанию — оставляем как есть
         super().__init__(**kwargs)
+
+        # Как только TextInput получает фокус (тап по тексту) —
+        # сразу снимаем его, чтобы не всплывала клавиатура.
+        # Небольшая задержка нужна, чтобы выделение успело сработать.
+        self.bind(focus=self._schedule_unfocus)
+
+    def _schedule_unfocus(self, instance, value):
+        if value:
+            from kivy.clock import Clock
+            Clock.schedule_once(self._do_unfocus, 0.1)
+
+    def _do_unfocus(self, dt):
+        if self.focus:
+            self.focus = False
 
 class MyTab(MDBoxLayout, MDTabsBase):
     """Класс для вкладки MDTabs."""
@@ -933,10 +947,11 @@ class UberGoorandaApp(MDApp):
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.accent_palette = "Teal"
 
+
         Builder.load_file(resource_path('ui.kv'))
 
         sm = WindowManager()
-        sm.add_widget(LoginWindow(name="LoginWindow"))
+        #sm.add_widget(LoginWindow(name="LoginWindow"))
         sm.add_widget(GoorandaWindow(name="Gooranda"))
         sm.add_widget(UberWindow(name="Uber"))
         sm.add_widget(WorkerWindow(name="WorkerWindow"))
@@ -945,6 +960,9 @@ class UberGoorandaApp(MDApp):
         sm.add_widget(SettingsWindow(name="SettingsWindow"))
         sm.add_widget(TorusWindow(name="TorusWindow"))
         sm.add_widget(NetworkTabsWindow(name="NetworkTabsWindow"))
+
+        Window.softinput_mode = 'below_target'
+        Window.softinput_mode_target_margin = dp(20)  # 20dp запаса
 
         return sm
 
@@ -1043,12 +1061,9 @@ class UberGoorandaApp(MDApp):
 
 def show_simple_dialog(title, text):
     """Простой Popup вместо MDDialog — работает на Adreno 610."""
-    from kivy.uix.popup import Popup
-    from kivy.uix.boxlayout import BoxLayout
     from kivy.uix.label import Label
     from kivy.uix.button import Button
-    from kivy.uix.scrollview import ScrollView
-    from kivy.metrics import dp
+
 
     content = BoxLayout(
         orientation="vertical",
@@ -1126,14 +1141,6 @@ def open_file_chooser(on_select, ext=None, start_path=None):
         return
 
     # ─── Windows / Linux: FileChooserListView в Popup ───
-    from kivy.uix.popup import Popup
-    from kivy.uix.boxlayout import BoxLayout
-    from kivy.uix.button import Button
-    from kivy.uix.label import Label
-    from kivy.uix.filechooser import FileChooserListView
-    from kivy.metrics import dp
-    from kivy.clock import Clock
-
     if not start_path:
         candidates = [
             os.path.expanduser("~/Downloads"),

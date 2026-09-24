@@ -6,13 +6,14 @@
 # цвета зафиксированы явно, а не берутся из app.theme_cls.
 # ════════════════════════════════════════════════════════════════
 
-#:set COLOR_BG       (0.965, 0.957, 0.929, 1)   # тёплый кремовый фон
-#:set COLOR_SURFACE  (1, 1, 1, 1)               # карточки / поверхности
-#:set COLOR_HEADER   (0.976, 0.969, 0.945, 1)   # шапка — светлая, чуть темнее фона
-#:set COLOR_DARK     (0.239, 0.216, 0.165, 1)   # тёплый тёмно-коричневый текст
-#:set COLOR_ON_DARK  (1, 1, 1, 1)               # белый текст на цветных кнопках
-#:set COLOR_PRIMARY  (0.800, 0.471, 0.361, 1)   # терракотовый акцент
-#:set COLOR_DANGER   (0.780, 0.302, 0.243, 1)   # приглушённый кирпично-красный
+#:set COLOR_BG       (0.953, 0.949, 0.973, 1)   # светлый лавандово-серый фон (как на сайте)
+#:set COLOR_SURFACE  (1, 1, 1, 1)               # белые карточки
+#:set COLOR_HEADER   (0.420, 0.161, 0.851, 1)   # фирменный фиолетовый «Миранда» — шапка
+#:set COLOR_DARK     (0.106, 0.106, 0.118, 1)   # тёмный текст (как в навигации сайта)
+#:set COLOR_ON_DARK  (1, 1, 1, 1)               # белый текст на фиолетовом/оранжевом/красном
+#:set COLOR_PRIMARY  (0.949, 0.349, 0.129, 1)   # фирменный оранжевый «Миранда» — акцент/кнопки
+#:set COLOR_DANGER   (0.851, 0.204, 0.204, 1)   # красный для опасных действий
+#:set COLOR_SUCCESS  (0.60, 0.87, 0.40, 1)     # салатовый для успешных действий
 
 #:set SPACE_XS  "4dp"
 #:set SPACE_SM  "8dp"
@@ -24,10 +25,33 @@
 #:set SIZE_BUTTON  "48dp"   # высота обычной кнопки
 #:set RADIUS_CARD  [16, 16, 16, 16]
 
+# ── Единый стиль кнопки (скруглённый прямоугольник + текст) ──
+<RoundedButton@Button>:
+    background_normal: ""
+    background_down: ""
+    background_color: (0.420, 0.161, 0.851, 1)     # COLOR_HEADER — как шапка
+    color: (1, 1, 1, 1)                              # COLOR_ON_DARK — белый текст
+    disabled_color: (1, 1, 1, 0.5)                   # белый полупрозрачный, когда кнопка отключена
+    size_hint: 1, None
+    height: SIZE_BUTTON
+    bold: True
+    font_size: "14sp"
 
-# ── Единая шапка экрана (стандартный Material App Bar: иконка(и) слева,
-#    заголовок, опциональная иконка справа — узнаваемый паттерн на любой
-#    платформе и у любого производителя устройства) ──
+    canvas.before:
+        Color:
+            rgba: (0.42, 0.16, 0.85, 0.4) if self.disabled else (self.background_color if self.background_color else (0.42, 0.16, 0.85, 1))
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [10, 10, 10, 10]
+
+<FixedDropDownItem@MDDropDownItem>:
+    size_hint_y: None
+    height: "56dp"
+    pos_hint: {"center_y": .5}
+    padding: "8dp", "8dp"
+
+
 <ScreenHeader@MDBoxLayout>:
     title: ""
     left_icon: ""
@@ -41,14 +65,20 @@
     height: SIZE_BAR
     padding: SPACE_XS, 0
     spacing: 0
-    md_bg_color: COLOR_HEADER
+    #md_background_color: COLOR_HEADER
+    canvas.before:
+        Color:
+            rgba: COLOR_HEADER
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
     MDIconButton:
         icon: root.left_icon or "checkbox-blank-circle-outline"
         opacity: 1 if root.left_icon else 0
         disabled: not root.left_icon
         theme_text_color: "Custom"
-        text_color: COLOR_DARK
+        text_color: COLOR_ON_DARK
         on_release: root.left_action()
 
     MDIconButton:
@@ -58,13 +88,13 @@
         size_hint_x: None
         width: "48dp" if root.left_icon_2 else "0dp"
         theme_text_color: "Custom"
-        text_color: COLOR_DARK
+        text_color: COLOR_ON_DARK
         on_release: root.left_action_2()
 
     MDLabel:
         text: root.title
         theme_text_color: "Custom"
-        text_color: COLOR_DARK
+        text_color: COLOR_ON_DARK
         bold: True
         valign: "middle"
         padding: SPACE_SM, 0
@@ -79,29 +109,24 @@
         size_hint_x: None
         width: "48dp" if root.right_icon else "0dp"
         theme_text_color: "Custom"
-        text_color: COLOR_DARK
+        text_color: COLOR_ON_DARK
         on_release: root.right_action()
 
 
 # ── Единая карточка для вывода текста (мягкое скругление + тень
 #    вместо плоского белого прямоугольника — аккуратнее и современнее) ──
-<OutputCard@MDCard>:
-    orientation: "vertical"
-    padding: SPACE_SM
-    radius: RADIUS_CARD
-    elevation: 1
-    md_bg_color: COLOR_SURFACE
+
 
 
 # ── Единый стиль кнопок: neutral / primary / danger ──
-<ActionButton@MDFlatButton>:
-    variant: "neutral"
-    elevation: 0
-    size_hint_y: None
-    height: SIZE_BUTTON
-    theme_text_color: "Custom"
-    md_bg_color: COLOR_PRIMARY if root.variant == "primary" else (COLOR_DANGER if root.variant == "danger" else COLOR_SURFACE)
-    text_color: COLOR_ON_DARK if root.variant in ("primary", "danger") else COLOR_DARK
+# Кнопка рисует фон сама (canvas), а не через MDFlatButton.md_bg_color —
+# в некоторых версиях KivyMD MDFlatButton рендерит текст через внутренний
+# дочерний виджет и просто игнорирует md_bg_color/text_color, заданные
+# напрямую (именно из-за этого кнопки были «бесцветными»). Самостоятельная
+# отрисовка гарантированно работает в любой версии библиотеки.
+# ── Единый стиль кнопок: neutral / primary / danger ──
+# ── Единый стиль кнопок: neutral / primary / danger ──
+
 
 
 # ────────────────────────────────────────────────────────────────
@@ -112,7 +137,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Gooranda Mode"
@@ -129,8 +154,11 @@
             spacing: SPACE_MD
 
             # ── Карточка вывода ──
-            OutputCard:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: SPACE_SM
                 size_hint_y: 0.55
+                md_background_color: COLOR_SURFACE
 
                 SelectableLabel:
                     id: output_text
@@ -142,14 +170,17 @@
                 height: SIZE_BUTTON
                 spacing: SPACE_SM
 
-                ActionButton:
+                RoundedButton:
                     text: "КОПИРОВАТЬ"
+                    height: "48dp"        # ← добавить, чтобы не «плыло»
                     disabled: output_text.text == ""
                     on_release: root.copy_to_clipboard(output_text.text)
 
-                ActionButton:
+                RoundedButton:
                     text: "НАВИГАТОР"
-                    variant: "primary"
+                    background_color: COLOR_PRIMARY
+                    color: COLOR_ON_DARK
+                    height: "48dp"        # ← добавить, чтобы не «плыло»
                     disabled: output_text.text == ''
                     on_release: root.open_browser(root.route)
 
@@ -158,7 +189,7 @@
                 height: SIZE_ROW
                 spacing: SPACE_SM
 
-                MDDropDownItem:
+                FixedDropDownItem:
                     id: spinner_id
                     text: "БС"
                     on_release: app.open_mode_menu(spinner_id)
@@ -170,11 +201,13 @@
                     text_validate_unfocus: False
                     on_text_validate: root.make_output()
 
-                ActionButton:
+                RoundedButton:
                     text: "GO"
-                    variant: "primary"
+                    background_color: COLOR_PRIMARY
+                    color: COLOR_ON_DARK
                     size_hint_x: None
                     width: "80dp"
+                    height: "48dp"        # ← добавить, чтобы не «плыло»
                     on_release: root.make_output()
 
 
@@ -186,7 +219,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Выбор сотрудников"
@@ -206,7 +239,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Ответственный за заявку"
@@ -226,7 +259,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Готовая заявка"
@@ -238,8 +271,11 @@
             padding: SPACE_MD
             spacing: SPACE_MD
 
-            OutputCard:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: SPACE_SM
                 size_hint_y: 0.85
+                md_background_color: COLOR_SURFACE
 
                 SelectableLabel:
                     id: crwo_text_output
@@ -251,13 +287,14 @@
                 height: SIZE_BUTTON
                 spacing: SPACE_SM
 
-                ActionButton:
+                RoundedButton:
                     text: "КОПИРОВАТЬ"
                     on_release: root.copy_to_clipboard(crwo_text_output.text)
 
-                ActionButton:
+                RoundedButton:
                     text: "НАЗАД"
-                    variant: "primary"
+                    background_color: COLOR_PRIMARY
+                    color: COLOR_ON_DARK
                     on_release: app.go_back("Uber")
 
 
@@ -269,7 +306,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Uber Mode"
@@ -290,7 +327,7 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    ActionButton:
+                    RoundedButton:
                         text: "-1"
                         size_hint_x: None
                         width: "60dp"
@@ -300,8 +337,11 @@
                         id: crwo_number
                         hint_text: "Номер CRWO"
                         mode: "rectangle"
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
 
-                    ActionButton:
+                    RoundedButton:
                         text: "+1"
                         size_hint_x: None
                         width: "60dp"
@@ -313,7 +353,8 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    MDDropDownItem:
+
+                    FixedDropDownItem:
                         id: tt_spinner
                         text: "TT"
                         size_hint_x: None
@@ -324,9 +365,14 @@
                         id: tt_number
                         hint_text: "Номер ТТ"
                         mode: "rectangle"
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
 
-                    ActionButton:
+                    RoundedButton:
                         text: "Очистить"
+                        background_color: COLOR_DANGER      # ← красный
+                        color: COLOR_ON_DARK                # ← белый текст
                         size_hint_x: None
                         width: "100dp"
                         on_release: root.clear_tt_number()
@@ -337,7 +383,7 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    MDDropDownItem:
+                    FixedDropDownItem:
                         id: moto_spinner
                         text: "БС"
                         size_hint_x: None
@@ -348,11 +394,17 @@
                         id: bs_name
                         hint_text: "Номер БС"
                         mode: "rectangle"
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
 
-                    ActionButton:
+                    RoundedButton:
                         text: "Очистить"
+                        background_color: COLOR_DANGER      # ← красный
+                        color: COLOR_ON_DARK                # ← белый текст
                         size_hint_x: None
                         width: "100dp"
+                        height: "48dp"        # ← добавить, чтобы не «плыло»
                         on_release: root.clear_bs_name()
 
                 # ── Регион / Организация ──
@@ -362,13 +414,13 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    MDDropDownItem:
+                    FixedDropDownItem:
                         id: region_short
                         text: "FEO"
                         pos_hint: {"center_x": .5}
                         on_release: app.open_region_menu(region_short)
 
-                    MDDropDownItem:
+                    FixedDropDownItem:
                         id: organization
                         text: "Миранда-Медиа"
                         pos_hint: {"center_x": .5}
@@ -381,7 +433,7 @@
                     height: "100dp"
                     spacing: SPACE_SM
 
-                    MDDropDownItem:
+                    FixedDropDownItem:
                         id: work_type
                         text: "🔋 ДГУ"
                         on_release: app.open_work_type_menu(work_type)
@@ -392,11 +444,17 @@
                         mode: "rectangle"
                         multiline: True
                         height: "100dp"
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
 
-                    ActionButton:
+                    RoundedButton:
                         text: "Очистить"
+                        background_color: COLOR_DANGER      # ← красный
+                        color: COLOR_ON_DARK                # ← белый текст
                         size_hint_x: None
                         width: "100dp"
+                        height: "48dp"        # ← добавить, чтобы не «плыло»
                         on_release: root.clear_description()
 
                 # ── Тип запитки / время ──
@@ -405,12 +463,12 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    MDDropDownItem:
+                    FixedDropDownItem:
                         id: work_description_spinner
                         text: "🪫 Запитать БС от ДГУ"
                         on_release: app.open_work_desc_menu(work_description_spinner)
 
-                    MDDropDownItem:
+                    FixedDropDownItem:
                         id: time_to_go_spinner
                         text: "Назначить время"
                         on_release: app.open_time_menu(time_to_go_spinner)
@@ -434,7 +492,7 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    ActionButton:
+                    RoundedButton:
                         text: "Выбрать сотрудников"
                         pos_hint: {"center_y": .5}
                         on_release: app.go_to("WorkerWindow")
@@ -473,9 +531,10 @@
             size_hint: 1, None
             height: "96dp"
 
-            ActionButton:
+            RoundedButton:
                 text: "СФОРМИРОВАТЬ ЗАЯВКУ"
-                variant: "primary"
+                background_color: (0.60, 0.87, 0.40, 1)   # салатовый
+                color: (0.106, 0.106, 0.118, 1)           # тёмный текст (лучше читается на светлом)
                 size_hint: None, None
                 size: "250dp", "64dp"
                 pos_hint: {"center_x": 0.5, "center_y": 0.5}
@@ -493,7 +552,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Настройки: обновление БД"
@@ -511,9 +570,10 @@
                 size_hint_y: None
                 height: "60dp"
 
-            ActionButton:
+            RoundedButton:
                 text: "ВЫБРАТЬ ФАЙЛ"
-                variant: "primary"
+                background_color: COLOR_PRIMARY
+                color: COLOR_ON_DARK
                 pos_hint: {"center_x": 0.5}
                 on_release: root.open_file_manager()
 
@@ -526,7 +586,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Torus: выбор документа"
@@ -544,21 +604,22 @@
                 size_hint_y: None
                 height: "40dp"
 
-            MDDropDownItem:
+            FixedDropDownItem:
                 id: dropdown_region
                 text: "FEO"
                 pos_hint: {"center_x": 0.5}
                 on_release: app.open_region_menu(self)
 
-            ActionButton:
+            RoundedButton:
                 id: torus_again
                 text: "AGAIN"
                 pos_hint: {"center_x": 0.5}
                 on_release: root.torus_again()
 
-            ActionButton:
+            RoundedButton:
                 text: "ВЫБРАТЬ ФАЙЛ"
-                variant: "primary"
+                background_color: COLOR_PRIMARY
+                color: COLOR_ON_DARK
                 pos_hint: {"center_x": 0.5}
                 on_release: root.open_file_manager()
 
@@ -574,26 +635,26 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         MDBoxLayout:
             orientation: "horizontal"
             size_hint_y: None
             height: SIZE_BAR
             padding: SPACE_XS, 0
-            md_bg_color: COLOR_HEADER
+            md_background_color: COLOR_HEADER
 
             MDIconButton:
                 icon: "arrow-left"
                 theme_text_color: "Custom"
-                text_color: COLOR_DARK
+                text_color: COLOR_ON_DARK
                 on_release: root.go_back()
 
             MDLabel:
                 id: app_bar
                 text: "Torus: результаты"
                 theme_text_color: "Custom"
-                text_color: COLOR_DARK
+                text_color: COLOR_ON_DARK
                 bold: True
                 valign: "middle"
                 padding: SPACE_SM, 0
@@ -628,18 +689,20 @@
             spacing: SPACE_SM
             padding: SPACE_SM
 
-            ActionButton:
+            RoundedButton:
                 text: "НАЗАД"
                 on_release: root.go_back()
 
-            ActionButton:
+            RoundedButton:
                 text: "КОПИРОВАТЬ"
-                variant: "primary"
+                background_color: COLOR_PRIMARY
+                color: COLOR_ON_DARK
                 on_release: root.copy_current_tab()
 
-            ActionButton:
+            RoundedButton:
                 text: "ОТМЕНА"
-                variant: "danger"
+                background_color: COLOR_DANGER
+                color: COLOR_ON_DARK
                 on_release: root.go_cancel()
 
 
@@ -660,7 +723,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_bg_color: COLOR_BG
+        md_background_color: COLOR_BG
 
         ScreenHeader:
             title: "Вход"
@@ -679,6 +742,9 @@
                 mode: "rectangle"
                 size_hint_y: None
                 height: SIZE_ROW
+                size_hint_y: None
+                height: "48dp"
+                pos_hint: { "center_y": .5 }
 
             MDTextField:
                 id: last_name
@@ -686,6 +752,7 @@
                 mode: "rectangle"
                 size_hint_y: None
                 height: SIZE_ROW
+                pos_hint: { "center_y": .5 }
 
             MDBoxLayout:
                 size_hint_y: None
@@ -720,13 +787,14 @@
                 height: SIZE_BUTTON
                 spacing: SPACE_SM
 
-                ActionButton:
+                RoundedButton:
                     text: "ЗАРЕГИСТРИРОВАТЬСЯ"
                     on_release: root.register()
 
-                ActionButton:
+                RoundedButton:
                     text: "ВОЙТИ"
-                    variant: "primary"
+                    background_color: COLOR_PRIMARY
+                    color: COLOR_ON_DARK
                     on_release: root.login()
 
             Widget:
