@@ -28,7 +28,6 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.graphics import Color, RoundedRectangle
 from kivy.metrics import dp
 from kivy.core.window import Window
-
 import platform
 IS_ANDROID = platform.system() == 'Android'
 # Импортируем androidstorage4kivy только на Android
@@ -40,8 +39,6 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.uix.filechooser import FileChooserIconView, FileChooserIconLayout
-
-
 import os
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
@@ -52,11 +49,12 @@ TEXT_COLOR = (0.25, 0.28, 0.33, 1)
 
 
 
+from kivy.graphics import Color, RoundedRectangle
+from kivy.clock import Clock
+
+
 class SelectableLabel(TextInput):
-    """TextInput readonly: скроллится, выделяется, ручки видны.
-    При уходе с экрана выделение снимается автоматически, чтобы
-    ручки не «висели» поверх других окон.
-    """
+    """TextInput readonly с нарисованной полосой прокрутки справа."""
     def __init__(self, **kwargs):
         kwargs.setdefault('readonly', True)
         kwargs.setdefault('multiline', True)
@@ -66,32 +64,60 @@ class SelectableLabel(TextInput):
         kwargs.setdefault('foreground_color', (0.25, 0.28, 0.33, 1))
         kwargs.setdefault('cursor_color', (0, 0, 0, 0))
         kwargs.setdefault('use_bubble', True)
-        kwargs.setdefault('use_handles', True)      # ← ручки возвращаем
+        kwargs.setdefault('use_handles', True)
         super().__init__(**kwargs)
 
-    def on_focus(self, instance, value):
-        # Если фокус уходит с TextInput — снимаем выделение (ручки исчезнут)
-        if not value:
-            self.cancel_selection()
+        # Рисуем полосу прокрутки справа через canvas.after
+        with self.canvas.after:
+            self._bar_color_instr = Color(0.42, 0.16, 0.85, 0.0)  # изначально прозрачная
+            self._bar_rect = RoundedRectangle(
+                pos=(0, 0), size=(0, 0), radius=[dp(2)]
+            )
 
-    def on_pre_leave(self, *args):
-        clear_all_selections(self)
+        self._bar_width = dp(4)   # толщина полосы
+        self._bar_fade_event = None
 
-    def on_parent(self, instance, parent):
-        # Когда виджет «отвязывается» от родителя (смена экрана) —
-        # снимаем выделение. Иначе ручки остаются поверх всего окна.
-        if parent is None:
-            self._clear_selection()
+        # Пересчитываем полосу при скролле и изменении размера
+        self.bind(scroll_y=self._update_bar)
+        self.bind(scroll_x=self._update_bar)
+        self.bind(pos=self._update_bar)
+        self.bind(size=self._update_bar)
+        self.bind(text=self._update_bar)
 
-    def _clear_selection(self):
+        Clock.schedule_once(self._update_bar, 0.1)
+
+    def _update_bar(self, *_):
+        """Пересчитывает позицию и размер полосы."""
         try:
-            self.cancel_selection()
-        except Exception:
-            pass
-        try:
-            self.focus = False
-        except Exception:
-            pass
+            # Размер содержимого — сколько всего строк
+            # В Kivy минимальная высота текста — self.minimum_height
+            content_height = self.minimum_height
+            visible_height = self.height
+
+            if content_height <= visible_height:
+                # Нечего скроллить — скрываем полосу
+                self._bar_color_instr.rgba = (0.42, 0.16, 0.85, 0.0)
+                return
+
+            # Показываем полосу
+            self._bar_color_instr.rgba = (0.42, 0.16, 0.85, 0.6)
+
+            # Высота видимой части полосы пропорциональна видимой части текста
+            bar_height = max(
+                visible_height * (visible_height / content_height),
+                dp(20)  # минимальная высота полосы
+            )
+
+            # Позиция полосы: scroll_y = 0 → низ, scroll_y = 1 → верх
+            # Запас снизу/сверху — небольшой отступ
+            track_y_min = self.y + dp(4)
+            track_y_max = self.y + self.height - bar_height - dp(4)
+            bar_y = track_y_min + (track_y_max - track_y_min) * self.scroll_y
+
+            self._bar_rect.pos = (self.right - self._bar_width - dp(2), bar_y)
+            self._bar_rect.size = (self._bar_width, bar_height)
+        except Exception as e:
+            print(f"Scrollbar update error: {e}")
 
 class MyTab(MDBoxLayout, MDTabsBase):
     """Класс для вкладки MDTabs."""
