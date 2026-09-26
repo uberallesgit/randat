@@ -53,6 +53,7 @@ from kivy.graphics import Color, RoundedRectangle
 from kivy.clock import Clock
 
 
+
 class SelectableLabel(TextInput):
     """TextInput readonly: скроллится, выделяется, ручки видны.
     При получении фокуса клавиатура принудительно скрывается —
@@ -491,14 +492,19 @@ class UberWindow(MDScreen):
             count += 1; warn += f"{count}. Не заполнен номер заявки\n"
         if not self.ids.respo_worker.text:
             count += 1; warn += f"{count}. Нужно ввести фамилию ответственного\n"
-        if self.ids.choose_workers_label.text in ("", ""):
+        if self.ids.choose_workers_label.text in ("Выбери исполнителей: ", ""):
             count += 1; warn += f"{count}. Не выбран ни один сотрудник\n"
 
         if mode == "БС":
             if not self.ids.bs_name.text:
                 count += 1; warn += f"{count}. Не заполнен номер БС\n"
-            if self.ids.tt_spinner.text == "TT" and not self.ids.tt_number.text:
-                count += 1; warn += f"{count}. Не заполнен номер ТТ\n"
+            # if self.ids.tt_spinner.text == "TT" and not self.ids.tt_number.text:
+            #     count += 1; warn += f"{count}. Не заполнен номер ТТ\n"
+
+            if self.ids.work_description_spinner.text == "Ввести свой вариант" \
+                    and not self.ids.work_description.text.strip():
+                count += 1
+                warn += f"{count}. Вы выбрали «Ввести свой вариант», но не заполнили описание работ\n"
         elif mode == "Офис":
             if not self.ids.work_description.text:
                 count += 1; warn += (f"{count}. Активен режим 'Офис', "
@@ -536,7 +542,11 @@ class UberWindow(MDScreen):
         t = self.ids.time_to_go_spinner.text
         hours = 2 if t == "Назначить время" else int(t.split()[0])
 
-        work_desc = self.ids.work_description.text or self.ids.work_description_spinner.text
+        spinner_val = self.ids.work_description_spinner.text
+        if spinner_val == "Ввести свой вариант":
+            work_desc = self.ids.work_description.text.strip()
+        else:
+            work_desc = spinner_val
 
         now = datetime.now().strftime('%d.%m.%Y %H:%M')
         arrive = (datetime.now() + timedelta(hours=hours)).strftime('%d.%m.%Y %H:%M')
@@ -582,7 +592,7 @@ class UberWindow(MDScreen):
                         bs = "CR" + p + bs
                 if bs in self.RDB:
                     output = (f"{crwo_number} / {bs}\n"
-                              f"Номер ТТ: {self.ids.tt_number.text}\n"
+                              # f"Номер ТТ: {self.ids.tt_number.text}\n"
                               f"Адрес: {self.RDB[bs]['address']}\n"
                               f"Координаты: {self.RDB[bs]['coordinates']}\n"
                               f"Тип работ: {self.ids.work_type.text}\n"
@@ -979,8 +989,19 @@ class UberGoorandaApp(MDApp):
         "⛽️Заправка генераторов Базовых Станций",
         "🌿 Обкосить траву по периметру БС",
         "❤️ Прохождение МО и ТО",
+        "Ввести свой вариант",
     ]
     MODE_OPTIONS = ["БС", "ARC", "ТП", "Адрес"]
+
+    def on_pause(self):
+        """Перед сворачиванием приложения — снимаем выделение."""
+        self._blur_all_inputs()
+        return True
+
+    def on_resume(self):
+        """После возврата — снимаем выделение на случай, если оно осталось."""
+        from kivy.clock import Clock
+        Clock.schedule_once(lambda dt: self._blur_all_inputs(), 0.1)
 
     def build(self):
         self.theme_cls.theme_style = "Light"
@@ -1007,11 +1028,41 @@ class UberGoorandaApp(MDApp):
         return sm
 
     # ── Навигация ──
+        # ── Навигация ──
+    def _blur_all_inputs(self):
+        """Снимает выделение и фокус со всех TextInput ДО смены экрана.
+        На Android ручки выделения — это нативные View поверх Activity,
+        и они закрываются корректно, только пока TextInput ещё активен.
+        """
+        from kivy.core.window import Window
+        try:
+            for screen in self.root.screens:
+                for child in screen.walk():
+                    if isinstance(child, TextInput):
+                        try:
+                            child.cancel_selection()
+                        except Exception:
+                            pass
+                        try:
+                            child.focus = False
+                        except Exception:
+                            pass
+        except Exception as e:
+            print(f"_blur_all_inputs: {e}")
+
+        # Дополнительно — закрыть клавиатуру
+        try:
+            Window.release_all_keyboards()
+        except Exception:
+            pass
+
     def go_to(self, screen_name, direction="left"):
+        self._blur_all_inputs()  # ← ПЕРЕД сменой экрана
         self.root.current = screen_name
         self.root.transition.direction = direction
 
     def go_back(self, screen_name):
+        self._blur_all_inputs()  # ← ПЕРЕД сменой экрана
         self.root.current = screen_name
         self.root.transition.direction = "right"
 
@@ -1095,7 +1146,28 @@ class UberGoorandaApp(MDApp):
         self.open_menu(caller, self.TIME_OPTIONS)
 
     def open_work_desc_menu(self, caller):
-        self.open_menu(caller, self.WORK_DESC_OPTIONS)
+        def on_select(value):
+            uber = self.root.get_screen("Uber")
+            box = uber.ids.custom_desc_box
+
+            if value == "Ввести свой вариант":
+                # Показываем поле
+                box.height = dp(110)
+                box.opacity = 1
+                box.disabled = False
+                # Ставим фокус через задержку (чтобы layout успел пересчитаться)
+                Clock.schedule_once(
+                    lambda dt: setattr(uber.ids.work_description, 'focus', True),
+                    0.2,
+                )
+            else:
+                # Прячем поле и очищаем его
+                box.height = 0
+                box.opacity = 0
+                box.disabled = True
+                uber.ids.work_description.text = ""
+
+        self.open_menu(caller, self.WORK_DESC_OPTIONS, on_select=on_select)
 
     # _set_mode — УДАЛИТЬ полностью
 
@@ -1292,6 +1364,39 @@ def clear_all_selections(screen):
                 child.focus = False
             except Exception:
                 pass
+
+def colorize_output(text):
+    """Раскрашивает ключевые поля в тексте через Kivy-markup."""
+    if not text:
+        return text
+
+    # Цвета
+    COLOR_BOLD   = "e8960d"   # оранжевый — заголовки
+    COLOR_ADDR   = "007AFF"   # синий — адрес
+    COLOR_COORD  = "34c759"   # зелёный — координаты
+    COLOR_WHO    = "af52de"   # фиолетовый — люди (ФИО)
+
+    lines = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+
+        # Заголовки "*** CR0122 ***" или "** CR0122 **"
+        if stripped.startswith("***") or stripped.startswith("**"):
+            lines.append(f"[b][color={COLOR_BOLD}]{line}[/color][/b]")
+        # Адрес
+        elif stripped.startswith("Адрес"):
+            lines.append(f"[color={COLOR_ADDR}]{line}[/color]")
+        # Координаты
+        elif stripped.startswith("Координаты"):
+            lines.append(f"[color={COLOR_COORD}]{line}[/color]")
+        # ФИО ответственных
+        elif ("Ответственный" in stripped or "Подрядчик" in stripped
+              or "Выдал заявку" in stripped):
+            lines.append(f"[b]{line}[/b]")
+        else:
+            lines.append(line)
+
+    return "\n".join(lines)
 
 
 if __name__ == '__main__':
