@@ -69,6 +69,14 @@ class SelectableLabel(TextInput):
         kwargs.setdefault('use_handles', True)      # ← ручки возвращаем
         super().__init__(**kwargs)
 
+    def on_focus(self, instance, value):
+        # Если фокус уходит с TextInput — снимаем выделение (ручки исчезнут)
+        if not value:
+            self.cancel_selection()
+
+    def on_pre_leave(self, *args):
+        clear_all_selections(self)
+
     def on_parent(self, instance, parent):
         # Когда виджет «отвязывается» от родителя (смена экрана) —
         # снимаем выделение. Иначе ручки остаются поверх всего окна.
@@ -251,6 +259,12 @@ class GoorandaWindow(MDScreen):
                 f"ЦТЭиСО : {RDB[bs].get('service_center', '')}\n")
 
     def make_output(self):
+        # Снимаем выделение с output_text перед новым запросом
+        try:
+            self.ids.output_text.cancel_selection()
+            self.ids.output_text.focus = False
+        except Exception:
+            pass
         RDB = self.RDB
         raw = self.ids.bs_name.text.strip()
         if not raw:
@@ -318,9 +332,6 @@ class GoorandaWindow(MDScreen):
             self.ids.output_text.text = total or "Ничего не найдено."
             self.ids.bs_name.text = ""
 
-    def on_pre_leave(self, *args):
-        clear_all_selections(self)
-        return super().on_pre_leave(*args) if hasattr(super(), 'on_pre_leave') else None
 
 
 # ────────────────────────────────────────────────────────────────
@@ -1254,11 +1265,17 @@ def open_file_chooser(on_select, ext=None, start_path=None):
     popup.open()
 
 def clear_all_selections(screen):
-    """Рекурсивно снимает выделение со всех SelectableLabel на экране."""
+    """Рекурсивно снимает выделение со всех SelectableLabel на экране.
+    Нужно вызывать при уходе с экрана, иначе ручки выделения
+    остаются висеть поверх других окон.
+    """
     for child in screen.walk():
         if isinstance(child, SelectableLabel):
             try:
                 child.cancel_selection()
+            except Exception:
+                pass
+            try:
                 child.focus = False
             except Exception:
                 pass
