@@ -197,6 +197,7 @@
                 MDTextField:
                     id: bs_name
                     hint_text: "Номер БС "
+                    input_type: "text"  # 👈 Добавь эту строку
                     mode: "rectangle"
                     text_validate_unfocus: False
                     on_text_validate: root.make_output()
@@ -336,6 +337,7 @@
                     MDTextField:
                         id: crwo_number
                         hint_text: "Номер CRWO"
+                        input_type: "text"  # 👈 Добавь эту строку
                         mode: "rectangle"
                         size_hint_y: None
                         height: "48dp"
@@ -364,6 +366,7 @@
                     MDTextField:
                         id: tt_number
                         hint_text: "Номер ТТ"
+                        input_type: "text"  # 👈 Добавь эту строку
                         mode: "rectangle"
                         size_hint_y: None
                         height: "48dp"
@@ -393,6 +396,7 @@
                     MDTextField:
                         id: bs_name
                         hint_text: "Номер БС"
+                        input_type: "text"  # 👈 Добавь эту строку
                         mode: "rectangle"
                         size_hint_y: None
                         height: "48dp"
@@ -441,9 +445,11 @@
                     MDTextField:
                         id: work_description
                         hint_text: "Описание работ"
+                        input_type: "text"  # 👈 Добавь эту строку
                         mode: "rectangle"
                         multiline: True
                         height: "100dp"
+                        max_height: "100dp"
                         size_hint_y: None
                         height: "48dp"
                         pos_hint: { "center_y": .5 }
@@ -454,6 +460,7 @@
                         color: COLOR_ON_DARK                # ← белый текст
                         size_hint_x: None
                         width: "100dp"
+                        pos_hint: {"center_y": .5}
                         height: "48dp"        # ← добавить, чтобы не «плыло»
                         on_release: root.clear_description()
 
@@ -520,6 +527,7 @@
                     id: respo_worker
                     hint_text: "Выдал заявку (Фамилия)"
                     mode: "rectangle"
+                    input_type: "text"  # 👈 Добавь эту строку
                     size_hint_y: None
                     height: SIZE_ROW
                     on_text_validate: root.write_responsible_worker(respo_worker.text)
@@ -746,6 +754,7 @@
                 id: first_name
                 hint_text: "Имя"
                 mode: "rectangle"
+                input_type: "text"  # 👈 Добавь эту строку
                 size_hint_y: None
                 height: SIZE_ROW
                 size_hint_y: None
@@ -755,6 +764,7 @@
             MDTextField:
                 id: last_name
                 hint_text: "Фамилия"
+                input_type: "text"  # 👈 Добавь эту строку
                 mode: "rectangle"
                 size_hint_y: None
                 height: SIZE_ROW
@@ -768,6 +778,7 @@
                 MDTextField:
                     id: password
                     hint_text: "Пароль"
+                    input_type: "text"  # 👈 Добавь эту строку
                     mode: "rectangle"
                     password: True
                     on_text_validate: root.login()
