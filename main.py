@@ -53,7 +53,10 @@ TEXT_COLOR = (0.25, 0.28, 0.33, 1)
 
 
 class SelectableLabel(TextInput):
-    """TextInput readonly: скроллится, выделяется, но не открывает клавиатуру."""
+    """TextInput readonly: скроллится, выделяется, ручки видны.
+    При уходе с экрана выделение снимается автоматически, чтобы
+    ручки не «висели» поверх других окон.
+    """
     def __init__(self, **kwargs):
         kwargs.setdefault('readonly', True)
         kwargs.setdefault('multiline', True)
@@ -63,23 +66,24 @@ class SelectableLabel(TextInput):
         kwargs.setdefault('foreground_color', (0.25, 0.28, 0.33, 1))
         kwargs.setdefault('cursor_color', (0, 0, 0, 0))
         kwargs.setdefault('use_bubble', True)
-        kwargs.setdefault('use_handles', False)
-        # scroll_from_swipe=True по умолчанию — оставляем как есть
+        kwargs.setdefault('use_handles', True)      # ← ручки возвращаем
         super().__init__(**kwargs)
 
-        # Как только TextInput получает фокус (тап по тексту) —
-        # сразу снимаем его, чтобы не всплывала клавиатура.
-        # Небольшая задержка нужна, чтобы выделение успело сработать.
-        self.bind(focus=self._schedule_unfocus)
+    def on_parent(self, instance, parent):
+        # Когда виджет «отвязывается» от родителя (смена экрана) —
+        # снимаем выделение. Иначе ручки остаются поверх всего окна.
+        if parent is None:
+            self._clear_selection()
 
-    def _schedule_unfocus(self, instance, value):
-        if value:
-            from kivy.clock import Clock
-            Clock.schedule_once(self._do_unfocus, 0.1)
-
-    def _do_unfocus(self, dt):
-        if self.focus:
+    def _clear_selection(self):
+        try:
+            self.cancel_selection()
+        except Exception:
+            pass
+        try:
             self.focus = False
+        except Exception:
+            pass
 
 class MyTab(MDBoxLayout, MDTabsBase):
     """Класс для вкладки MDTabs."""
@@ -314,6 +318,10 @@ class GoorandaWindow(MDScreen):
             self.ids.output_text.text = total or "Ничего не найдено."
             self.ids.bs_name.text = ""
 
+    def on_pre_leave(self, *args):
+        clear_all_selections(self)
+        return super().on_pre_leave(*args) if hasattr(super(), 'on_pre_leave') else None
+
 
 # ────────────────────────────────────────────────────────────────
 # WORKER — выбор сотрудников
@@ -377,6 +385,10 @@ class ResponsiblesWindow(MDScreen):
 # CRWO — вывод готовой заявки
 # ────────────────────────────────────────────────────────────────
 class CrwoWindow(MDScreen):
+
+    def on_pre_leave(self, *args):
+        clear_all_selections(self)
+
     def copy_to_clipboard(self, string):
         if string:
             Clipboard.copy(string)
@@ -885,6 +897,10 @@ class TorusWindow(MDScreen):
 # NETWORK TABS — вкладки GSM / UMTS / LTE
 # ────────────────────────────────────────────────────────────────
 class NetworkTabsWindow(MDScreen):
+
+    def on_pre_leave(self, *args):
+        clear_all_selections(self)
+
     def copy_current_tab(self, *_):
         """Копирует текст активной вкладки MDTabs."""
         try:
@@ -1236,6 +1252,16 @@ def open_file_chooser(on_select, ext=None, start_path=None):
     )
 
     popup.open()
+
+def clear_all_selections(screen):
+    """Рекурсивно снимает выделение со всех SelectableLabel на экране."""
+    for child in screen.walk():
+        if isinstance(child, SelectableLabel):
+            try:
+                child.cancel_selection()
+                child.focus = False
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':
