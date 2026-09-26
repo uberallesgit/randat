@@ -54,7 +54,10 @@ from kivy.clock import Clock
 
 
 class SelectableLabel(TextInput):
-    """TextInput readonly с нарисованной полосой прокрутки справа."""
+    """TextInput readonly: скроллится, выделяется, ручки видны.
+    При получении фокуса клавиатура принудительно скрывается —
+    фокус остаётся, поэтому свайп-скролл работает на Android.
+    """
     def __init__(self, **kwargs):
         kwargs.setdefault('readonly', True)
         kwargs.setdefault('multiline', True)
@@ -65,59 +68,26 @@ class SelectableLabel(TextInput):
         kwargs.setdefault('cursor_color', (0, 0, 0, 0))
         kwargs.setdefault('use_bubble', True)
         kwargs.setdefault('use_handles', True)
+        # ── Скролл ──
+        kwargs.setdefault('scroll_from_swipe', True)
+        kwargs.setdefault('scroll_timeout', 100)
+        kwargs.setdefault('scroll_distance', 15)
+        kwargs.setdefault('unfocus_on_touch', False)
+        kwargs.setdefault('input_type', 'text')
         super().__init__(**kwargs)
 
-        # Рисуем полосу прокрутки справа через canvas.after
-        with self.canvas.after:
-            self._bar_color_instr = Color(0.42, 0.16, 0.85, 0.0)  # изначально прозрачная
-            self._bar_rect = RoundedRectangle(
-                pos=(0, 0), size=(0, 0), radius=[dp(2)]
-            )
+        self.bind(focus=self._on_focus)
 
-        self._bar_width = dp(4)   # толщина полосы
-        self._bar_fade_event = None
+    def _on_focus(self, instance, value):
+        if value:
+            # Небольшая задержка — иначе клавиатура ещё не создана
+            Clock.schedule_once(self._hide_keyboard, 0.05)
 
-        # Пересчитываем полосу при скролле и изменении размера
-        self.bind(scroll_y=self._update_bar)
-        self.bind(scroll_x=self._update_bar)
-        self.bind(pos=self._update_bar)
-        self.bind(size=self._update_bar)
-        self.bind(text=self._update_bar)
-
-        Clock.schedule_once(self._update_bar, 0.1)
-
-    def _update_bar(self, *_):
-        """Пересчитывает позицию и размер полосы."""
+    def _hide_keyboard(self, dt):
         try:
-            # Размер содержимого — сколько всего строк
-            # В Kivy минимальная высота текста — self.minimum_height
-            content_height = self.minimum_height
-            visible_height = self.height
-
-            if content_height <= visible_height:
-                # Нечего скроллить — скрываем полосу
-                self._bar_color_instr.rgba = (0.42, 0.16, 0.85, 0.0)
-                return
-
-            # Показываем полосу
-            self._bar_color_instr.rgba = (0.42, 0.16, 0.85, 0.6)
-
-            # Высота видимой части полосы пропорциональна видимой части текста
-            bar_height = max(
-                visible_height * (visible_height / content_height),
-                dp(20)  # минимальная высота полосы
-            )
-
-            # Позиция полосы: scroll_y = 0 → низ, scroll_y = 1 → верх
-            # Запас снизу/сверху — небольшой отступ
-            track_y_min = self.y + dp(4)
-            track_y_max = self.y + self.height - bar_height - dp(4)
-            bar_y = track_y_min + (track_y_max - track_y_min) * self.scroll_y
-
-            self._bar_rect.pos = (self.right - self._bar_width - dp(2), bar_y)
-            self._bar_rect.size = (self._bar_width, bar_height)
+            Window.release_all_keyboards()
         except Exception as e:
-            print(f"Scrollbar update error: {e}")
+            print(f"hide_keyboard: {e}")
 
 class MyTab(MDBoxLayout, MDTabsBase):
     """Класс для вкладки MDTabs."""
@@ -651,7 +621,7 @@ class UberWindow(MDScreen):
                             bs_names.append(bs_current)
                             checked_bs = ', '.join(bs_names)
                             checked_output = (f"{crwo_number} / {checked_bs}\n"
-                                              f"Номер ТТ: {self.ids.tt_number.text}\n"
+                                              #f"Номер ТТ: {self.ids.tt_number.text}\n"
                                               f"Тип работ: {self.ids.work_type.text}\n"
                                               f"Описание работ: {work_desc}\n"
                                               f"Дата/время выдачи задания: {now}\n"
@@ -665,7 +635,7 @@ class UberWindow(MDScreen):
 
                             crwo_number = f"CRWO_{self.ids.region_short.text}_{prefix}{str(int(crwo_num) + crwo_delta)}"
                             output = (f"{crwo_number} / {bs_current}\n"
-                                      f"Номер ТТ: {self.ids.tt_number.text}\n"
+                                      #f"Номер ТТ: {self.ids.tt_number.text}\n"
                                       f"Адрес: {self.RDB[bs_current]['address']}\n"
                                       f"Координаты: {self.RDB[bs_current]['coordinates']}\n"
                                       f"Тип работ: {self.ids.work_type.text}\n"
@@ -966,7 +936,24 @@ class NetworkTabsWindow(MDScreen):
 # КОРНЕВОЙ SCREEN MANAGER
 # ────────────────────────────────────────────────────────────────
 class WindowManager(MDScreenManager):
-    pass
+    """ScreenManager, который при каждой смене экрана снимает выделение
+    со всех SelectableLabel — иначе ручки выделения (они рисуются в Window)
+    остаются висеть поверх других экранов."""
+
+    def on_current(self, instance, value):
+        super().on_current(instance, value)
+        # Откладываем на 1 кадр, чтобы transition успел начаться
+        Clock.schedule_once(self._clear_all_selections, 0.05)
+
+    def _clear_all_selections(self, *_):
+        for screen in self.screens:
+            for child in screen.walk():
+                if isinstance(child, SelectableLabel):
+                    try:
+                        child.cancel_selection()
+                        child.focus = False
+                    except Exception:
+                        pass
 
 
 # ────────────────────────────────────────────────────────────────
