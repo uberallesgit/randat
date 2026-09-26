@@ -432,15 +432,26 @@
 
                 # ── Тип работ / описание ──
                 MDBoxLayout:
-                    orientation: "horizontal"
+                    orientation: "vertical"
                     size_hint_y: None
-                    height: "100dp"
+                    height: "200dp"
                     spacing: SPACE_SM
 
-                    FixedDropDownItem:
-                        id: work_type
-                        text: "🔋 ДГУ"
-                        on_release: app.open_work_type_menu(work_type)
+                    MDBoxLayout:
+                        orientation: "horizontal"
+                        size_hint_y: None
+                        #height: "200dp"
+                        spacing: SPACE_SM
+
+                        FixedDropDownItem:
+                            id: work_type
+                            text: "🔋 ДГУ"
+                            on_release: app.open_work_type_menu(work_type)
+
+                        FixedDropDownItem:
+                            id: work_description_spinner
+                            text: "🪫 Запитать БС от ДГУ"
+                            on_release: app.open_work_desc_menu(work_description_spinner)
 
                     MDTextField:
                         id: work_description
@@ -459,7 +470,7 @@
                         background_color: COLOR_DANGER      # ← красный
                         color: COLOR_ON_DARK                # ← белый текст
                         size_hint_x: None
-                        width: "100dp"
+                        #width: "100dp"
                         pos_hint: {"center_y": .5}
                         height: "48dp"        # ← добавить, чтобы не «плыло»
                         on_release: root.clear_description()
@@ -470,10 +481,7 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    FixedDropDownItem:
-                        id: work_description_spinner
-                        text: "🪫 Запитать БС от ДГУ"
-                        on_release: app.open_work_desc_menu(work_description_spinner)
+
 
                     FixedDropDownItem:
                         id: time_to_go_spinner
@@ -541,8 +549,8 @@
 
             RoundedButton:
                 text: "СФОРМИРОВАТЬ ЗАЯВКУ"
-                background_color: (0.60, 0.87, 0.40, 1)   # салатовый
-                color: (0.106, 0.106, 0.118, 1)           # тёмный текст (лучше читается на светлом)
+                background_color: COLOR_PRIMARY   # салатовый (0.60, 0.87, 0.40, 1)
+                color: COLOR_ON_DARK           # тёмный текст (0.106, 0.106, 0.118, 1)(лучше читается на светлом)
                 size_hint: None, None
                 size: "250dp", "64dp"
                 pos_hint: {"center_x": 0.5, "center_y": 0.5}
