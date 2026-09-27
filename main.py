@@ -1097,9 +1097,12 @@ class UberGoorandaApp(MDApp):
 
         def _sel(v):
             caller.text = v
-            if on_select:
-                on_select(v)
             popup.dismiss()
+            # Callback запускаем ПОСЛЕ того, как Popup полностью закроется —
+            # иначе на MIUI (Xiaomi) перерисовка layout'а с активным Popup
+            # вызывает нативный краш.
+            if on_select:
+                Clock.schedule_once(lambda dt: on_select(v), 0.15)
 
         for opt in options:
             b = Button(
@@ -1147,25 +1150,25 @@ class UberGoorandaApp(MDApp):
 
     def open_work_desc_menu(self, caller):
         def on_select(value):
-            uber = self.root.get_screen("Uber")
-            box = uber.ids.custom_desc_box
+            try:
+                uber = self.root.get_screen("Uber")
+                box = uber.ids.custom_desc_box
 
-            if value == "Ввести свой вариант":
-                # Показываем поле
-                box.height = dp(110)
-                box.opacity = 1
-                box.disabled = False
-                # Ставим фокус через задержку (чтобы layout успел пересчитаться)
-                Clock.schedule_once(
-                    lambda dt: setattr(uber.ids.work_description, 'focus', True),
-                    0.2,
-                )
-            else:
-                # Прячем поле и очищаем его
-                box.height = 0
-                box.opacity = 0
-                box.disabled = True
-                uber.ids.work_description.text = ""
+                if value == "Ввести свой вариант":
+                    box.height = dp(110)
+                    box.opacity = 1
+                    box.disabled = False
+                    Clock.schedule_once(
+                        lambda dt: setattr(uber.ids.work_description, "focus", True),
+                        0.3,
+                    )
+                else:
+                    box.height = 0
+                    box.opacity = 0
+                    box.disabled = True
+                    uber.ids.work_description.text = ""
+            except Exception as e:
+                print(f"open_work_desc_menu error: {e}")
 
         self.open_menu(caller, self.WORK_DESC_OPTIONS, on_select=on_select)
 
