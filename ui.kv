@@ -115,9 +115,6 @@
 
 # ── Единая карточка для вывода текста (мягкое скругление + тень
 #    вместо плоского белого прямоугольника — аккуратнее и современнее) ──
-
-
-
 # ── Единый стиль кнопок: neutral / primary / danger ──
 # Кнопка рисует фон сама (canvas), а не через MDFlatButton.md_bg_color —
 # в некоторых версиях KivyMD MDFlatButton рендерит текст через внутренний
@@ -350,35 +347,35 @@
                         on_release: root.crwo_increment(root.ids.crwo_number.text)
 
                 # ── Trouble Ticket ──
-                MDBoxLayout:
-                    size_hint_y: None
-                    height: SIZE_ROW
-                    spacing: SPACE_SM
-
-
-                    FixedDropDownItem:
-                        id: tt_spinner
-                        text: "TT"
-                        size_hint_x: None
-                        width: "100dp"
-                        on_release: app.open_tt_menu(tt_spinner)
-
-                    MDTextField:
-                        id: tt_number
-                        hint_text: "Номер ТТ"
-                        input_type: "text"  # 👈 Добавь эту строку
-                        mode: "rectangle"
-                        size_hint_y: None
-                        height: "48dp"
-                        pos_hint: { "center_y": .5 }
-
-                    RoundedButton:
-                        text: "Очистить"
-                        background_color: COLOR_DANGER      # ← красный
-                        color: COLOR_ON_DARK                # ← белый текст
-                        size_hint_x: None
-                        width: "100dp"
-                        on_release: root.clear_tt_number()
+#                MDBoxLayout:
+#                    size_hint_y: None
+#                    height: SIZE_ROW
+#                    spacing: SPACE_SM
+#
+#
+#                    FixedDropDownItem:
+#                        id: tt_spinner
+#                        text: "TT"
+#                        size_hint_x: None
+#                        width: "100dp"
+#                        on_release: app.open_tt_menu(tt_spinner)
+#
+#                    MDTextField:
+#                        id: tt_number
+#                        hint_text: "Номер ТТ"
+#                        input_type: "text"  # 👈 Добавь эту строку
+#                        mode: "rectangle"
+#                        size_hint_y: None
+#                        height: "48dp"
+#                        pos_hint: { "center_y": .5 }
+#
+#                    RoundedButton:
+#                        text: "Очистить"
+#                        background_color: COLOR_DANGER      # ← красный
+#                        color: COLOR_ON_DARK                # ← белый текст
+#                        size_hint_x: None
+#                        width: "100dp"
+#                        on_release: root.clear_tt_number()
 
                 # ── БС ──
                 MDBoxLayout:
@@ -430,58 +427,56 @@
                         pos_hint: {"center_x": .5}
                         on_release: app.open_organization_menu(organization)
 
-                # ── Тип работ / описание ──
+                                # ── Строка 1: тип работ + тип запитки ──
                 MDBoxLayout:
-                    orientation: "vertical"
-                    size_hint_y: None
-                    height: "200dp"
-                    spacing: SPACE_SM
-
-                    MDBoxLayout:
-                        orientation: "horizontal"
-                        size_hint_y: None
-                        #height: "200dp"
-                        spacing: SPACE_SM
-
-                        FixedDropDownItem:
-                            id: work_type
-                            text: "🔋 ДГУ"
-                            on_release: app.open_work_type_menu(work_type)
-
-                        FixedDropDownItem:
-                            id: work_description_spinner
-                            text: "🪫 Запитать БС от ДГУ"
-                            on_release: app.open_work_desc_menu(work_description_spinner)
-
-                    MDTextField:
-                        id: work_description
-                        hint_text: "Описание работ"
-                        input_type: "text"  # 👈 Добавь эту строку
-                        mode: "rectangle"
-                        multiline: True
-                        height: "100dp"
-                        max_height: "100dp"
-                        size_hint_y: None
-                        height: "48dp"
-                        pos_hint: { "center_y": .5 }
-
-                    RoundedButton:
-                        text: "Очистить"
-                        background_color: COLOR_DANGER      # ← красный
-                        color: COLOR_ON_DARK                # ← белый текст
-                        size_hint_x: None
-                        #width: "100dp"
-                        pos_hint: {"center_y": .5}
-                        height: "48dp"        # ← добавить, чтобы не «плыло»
-                        on_release: root.clear_description()
-
-                # ── Тип запитки / время ──
-                MDBoxLayout:
+                    orientation: "horizontal"
                     size_hint_y: None
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
+                    FixedDropDownItem:
+                        id: work_type
+                        text: "🔋 ДГУ"
+                        on_release: app.open_work_type_menu(work_type)
 
+                    FixedDropDownItem:
+                        id: work_description_spinner
+                        text: "🪫 Запитать БС от ДГУ"
+                        on_release: app.open_work_desc_menu(work_description_spinner)
+
+                # ── Строка 2: своё описание работ (схлопнута по умолчанию) ──
+                MDBoxLayout:
+                    id: custom_desc_box
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: 0
+                    opacity: 0
+                    disabled: True
+                    spacing: SPACE_SM
+
+                    MDTextField:
+                        id: work_description
+                        hint_text: "Описание работ (свой вариант)"
+                        mode: "rectangle"
+                        multiline: True
+                        size_hint_y: None
+                        max_height: "120dp"
+
+                    RoundedButton:
+                        text: "Очистить"
+                        size_hint_x: None
+                        width: "100dp"
+                        size_hint_y: None
+                        height: "48dp"
+                        #pos_hint: {"center_y": .5}
+                        on_release: root.clear_description()
+
+                # ── Строка 3: время ──
+                MDBoxLayout:
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: SIZE_ROW
+                    spacing: SPACE_SM
 
                     FixedDropDownItem:
                         id: time_to_go_spinner
@@ -499,6 +494,7 @@
                         text: "Выбери исполнителей: "
                         font_style: "Body1"
                         pos_hint: {"center_y": .5}
+                        pos_hint: {"center_x": .5}
                         valign: "middle"
 
                 MDBoxLayout:
