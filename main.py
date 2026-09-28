@@ -447,6 +447,15 @@ class UberWindow(MDScreen):
         except FileNotFoundError:
             self.ids.respo_worker.text = ""
 
+        if self.ids.respo_worker.text.strip():
+            self.ids.respo_view_label.text = f"Мастер над заявкой: {self.ids.respo_worker.text.strip()}"
+            self.ids.respo_edit_box.height = 0
+            self.ids.respo_edit_box.opacity = 0
+            self.ids.respo_edit_box.disabled = True
+            self.ids.respo_view_box.height = dp(56)
+            self.ids.respo_view_box.opacity = 1
+            self.ids.respo_view_box.disabled = False
+
     # ── Диалог ──
     def show_dialog(self, text, title="Внимание"):
         show_simple_dialog(title, text)
@@ -482,6 +491,40 @@ class UberWindow(MDScreen):
     def write_responsible_worker(self, value):
         with open(service_path('responsible.txt'), "w", encoding="utf-8") as f:
             f.write(str(value))
+
+    def assign_responsible(self, *_):
+        print("=== assign_responsible вызван ===")
+        """Присвоить владельца: скрыть поле ввода, показать Label."""
+        name = self.ids.respo_worker.text.strip()
+        if not name:
+            self.show_dialog("Введите фамилию, прежде чем присвоить")
+            return
+
+        # Сохраняем в файл
+        self.write_responsible_worker(name)
+
+        # Обновляем Label
+        self.ids.respo_view_label.text = f"Мастер над заявкой: {name}"
+
+        # Скрываем поле ввода
+        self.ids.respo_edit_box.height = 0
+        self.ids.respo_edit_box.opacity = 0
+        self.ids.respo_edit_box.disabled = True
+
+        # Показываем Label
+        self.ids.respo_view_box.height = dp(56)
+        self.ids.respo_view_box.opacity = 1
+        self.ids.respo_view_box.disabled = False
+
+    def edit_responsible(self, *_):
+        """Вернуть поле ввода обратно, чтобы можно было изменить."""
+        self.ids.respo_edit_box.height = dp(56)
+        self.ids.respo_edit_box.opacity = 1
+        self.ids.respo_edit_box.disabled = False
+
+        self.ids.respo_view_box.height = 0
+        self.ids.respo_view_box.opacity = 0
+        self.ids.respo_view_box.disabled = True
 
     # ── Валидация и старт ──
     def start(self):
