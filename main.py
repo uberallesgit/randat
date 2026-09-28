@@ -884,7 +884,21 @@ class TorusWindow(MDScreen):
         umts_table = build_table(bad_cells('avail_3g', '3g'), 'avail_3g')
         lte_table = build_table(bad_cells('avail_4g', '4g'), 'avail_4g')
 
-        return bs_quan, gsm_table, umts_table, lte_table
+        # ─── Средняя доступность по всем работающим сотам (OnAir == 1) ───
+        def avg_avail(tech_key, onair_key):
+            vals = [
+                r[tech_key] for r in region_rows
+                if r['onair_' + onair_key] == 1 and r[tech_key] is not None
+            ]
+            if not vals:
+                return 0.0
+            return round(sum(vals) / len(vals), 2)
+
+        gsm_avg = avg_avail('avail_2g', '2g')
+        umts_avg = avg_avail('avail_3g', '3g')
+        lte_avg = avg_avail('avail_4g', '4g')
+
+        return bs_quan, gsm_table, umts_table, lte_table, gsm_avg, umts_avg, lte_avg
 
     def select_path(self, path):
         self.last_path = path
@@ -896,14 +910,26 @@ class TorusWindow(MDScreen):
         print(f"Регион: {self.selected_region}")
         region  = self.selected_region
         # Тут твоя логика обработки Torus-файла
-        bs_quan, gsm_table, umts_table, lte_table = self.torus_procedure(region,path)
+        bs_quan, gsm_table, umts_table, lte_table, gsm_avg, umts_avg, lte_avg = \
+            self.torus_procedure(region, path)
 
         network_tabs_screen = self.manager.get_screen('NetworkTabsWindow')
-        # Теперь обращаемся к ids этого экрана
-        network_tabs_screen.ids.app_bar.title = f"Всего {bs_quan} БС"
-        network_tabs_screen.ids.gsm.text = gsm_table
-        network_tabs_screen.ids.umts.text = umts_table
-        network_tabs_screen.ids.lte.text = lte_table
+
+        # ─── Заголовок — количество БС ───
+        # ⚠️ app_bar теперь MDLabel, поэтому .text, а не .title
+        network_tabs_screen.ids.app_bar.text = f"Torus: {bs_quan} БС"
+
+        # ─── Обновляем заголовки вкладок со средней доступностью ───
+        # ─── Содержимое вкладок — средняя доступность в шапке каждой вкладки ───
+        # MDTabs в KivyMD 1.1.1 не перерисовывает .title,
+        # поэтому выводим среднее ПРЯМО В ТЕКСТЕ содержимого.
+        gsm_header = f"Доступность GSM/DCS: {gsm_avg}%\n\n"
+        umts_header = f"Доступность UMTS: {umts_avg}%\n\n"
+        lte_header = f"Доступность LTE: {lte_avg}%\n\n"
+
+        network_tabs_screen.ids.gsm.text = gsm_header + gsm_table
+        network_tabs_screen.ids.umts.text = umts_header + umts_table
+        network_tabs_screen.ids.lte.text = lte_header + lte_table
 
         self.manager.current = 'NetworkTabsWindow'
         self.manager.transition.direction = 'left'
