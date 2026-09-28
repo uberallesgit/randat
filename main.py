@@ -1175,7 +1175,7 @@ class UberGoorandaApp(MDApp):
     # _set_mode — УДАЛИТЬ полностью
 
 def show_simple_dialog(title, text):
-    """Простой Popup вместо MDDialog — работает на Adreno 610."""
+
     from kivy.uix.label import Label
     from kivy.uix.button import Button
 

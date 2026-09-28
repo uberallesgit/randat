@@ -456,6 +456,7 @@
 
                     MDTextField:
                         id: work_description
+                        input_type: "text"  # 👈 Добавь эту строку
                         hint_text: "Описание работ (свой вариант)"
                         mode: "rectangle"
                         multiline: True
@@ -465,6 +466,8 @@
                     RoundedButton:
                         text: "Очистить"
                         size_hint_x: None
+                        background_color: COLOR_DANGER      # ← красный
+                        color: COLOR_ON_DARK                # ← белый текст
                         width: "100dp"
                         size_hint_y: None
                         height: "48dp"
