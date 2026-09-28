@@ -2,9 +2,8 @@ name: Build KivyMD APK
 
 on:
   push:
-    branches:
-      - main
-      - Mir_theme_succsess
+    branches: Mir_theme_succsess
+      
   workflow_dispatch:
 
 jobs:
