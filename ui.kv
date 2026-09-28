@@ -529,15 +529,54 @@
                             theme_text_color: "Hint" if self.disabled else "Primary"
                             valign: "middle"
 
-                # ── Ответственный ──
-                MDTextField:
-                    id: respo_worker
-                    hint_text: "Выдал заявку (Фамилия)"
-                    mode: "rectangle"
-                    input_type: "text"  # 👈 Добавь эту строку
+                # ── Ответственный: режим ввода ──
+                MDBoxLayout:
+                    id: respo_edit_box
+                    orientation: "horizontal"
                     size_hint_y: None
                     height: SIZE_ROW
-                    on_text_validate: root.write_responsible_worker(respo_worker.text)
+                    spacing: SPACE_SM
+
+                    MDTextField:
+                        id: respo_worker
+                        hint_text: "Выдал заявку (Фамилия)"
+                        mode: "rectangle"
+                        size_hint_y: None
+                        height: SIZE_ROW
+                        on_text_validate: root.assign_responsible()
+
+                    RoundedButton:
+                        text: "Присвоить"
+                        size_hint_y: None
+                        height: "56dp"
+                        width: "120dp"
+                        pos_hint: { "center_y": .5 }
+                        on_press: root.assign_responsible()
+
+                # ── Ответственный: режим просмотра (скрыт по умолчанию) ──
+                MDBoxLayout:
+                    id: respo_view_box
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: 0
+                    opacity: 0
+                    disabled: True
+                    spacing: SPACE_SM
+
+                    MDLabel:
+                        id: respo_view_label
+                        text: ""
+                        theme_text_color: "Custom"
+                        text_color: (0.106, 0.106, 0.118, 1)
+                        font_style: "Body1"
+                        valign: "middle"
+                        padding: SPACE_MD, 0
+
+                    RoundedButton:
+                        text: "Изменить"
+                        size_hint_x: None
+                        width: "120dp"
+                        on_release: root.edit_responsible()
 
         # ── Кнопка формирования ──
         FloatLayout:
