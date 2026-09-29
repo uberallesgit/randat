@@ -153,7 +153,13 @@ class LoginWindow(MDScreen):
     """Поля: Имя, Фамилия, Пароль. Кнопки: Войти / Зарегистрироваться."""
 
     def on_pre_enter(self, *args):
-        self.set_error("")
+        """Обновляем бейдж на иконке людей."""
+        try:
+            count = count_upcoming_birthdays(7)
+            print(f"[Gooranda] именинников в ближайшие 7 дней: {count}")
+            self.ids.gooranda_header.badge_text = str(count) if count > 0 else ""
+        except Exception as e:
+            print(f"on_pre_enter badge: {e}")
 
     def set_error(self, text: str) -> None:
         self.ids.error_label.text = text
@@ -221,6 +227,15 @@ class GoorandaWindow(MDScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.dialog = None
+
+    def on_pre_enter(self, *args):
+        """Обновляем бейдж на иконке людей."""
+        count = count_upcoming_birthdays(7)
+        try:
+            badge = self.ids.gooranda_header.ids.badge
+            badge.text = str(count) if count > 0 else ""
+        except Exception as e:
+            print(f"on_pre_enter badge: {e}")
 
     # ── UI-хелперы ──
     def copy_to_clipboard(self, string):
@@ -1669,39 +1684,36 @@ class BirthdayWindow(MDScreen):
         return None
 
     # ── Список именинников на текущей неделе ──
-    def _this_week(self, records):
+    def _next_days(self, records, days):
+        """Список именинников в ближайшие N дней (включая сегодня).
+        Если ДР уже прошёл в этом году — переносится на следующий."""
         today = datetime.now().date()
-        start = today - timedelta(days=today.weekday())   # понедельник
-        end = start + timedelta(days=6)                    # воскресенье
+        end = today + timedelta(days=days)
         result = []
+
         for r in records:
             bd = self._parse_date(r["birth_date"])
             if not bd:
                 continue
+
+            # ДР в этом году
             try:
                 bd_this_year = bd.replace(year=today.year)
-            except ValueError:      # 29 февраля → 28
+            except ValueError:  # 29.02 → 28.02
                 bd_this_year = bd.replace(year=today.year, day=28)
-            if start <= bd_this_year <= end:
-                result.append((r, bd_this_year))
-        result.sort(key=lambda x: x[1])
-        return result
 
-    # ── Список именинников в текущем месяце ──
-    def _this_month(self, records):
-        today = datetime.now().date()
-        result = []
-        for r in records:
-            bd = self._parse_date(r["birth_date"])
-            if not bd:
-                continue
-            if bd.month == today.month:
+            # Если уже прошёл — берём следующий год
+            if bd_this_year < today:
                 try:
-                    bd_this_year = bd.replace(year=today.year)
+                    bd_this_year = bd.replace(year=today.year + 1)
                 except ValueError:
-                    bd_this_year = bd.replace(year=today.year, day=28)
+                    bd_this_year = bd.replace(year=today.year + 1, day=28)
+
+            # Попадает в диапазон?
+            if today <= bd_this_year <= end:
                 result.append((r, bd_this_year))
-        result.sort(key=lambda x: (x[1].day, x[1].month))
+
+        result.sort(key=lambda x: x[1])
         return result
 
     # ── Обновление трёх вкладок ──
@@ -1709,27 +1721,27 @@ class BirthdayWindow(MDScreen):
         records = self._load_records()
         today = datetime.now().date()
 
-        # ── Эта неделя ──
-        week = self._this_week(records)
+        # ── Ближайшие 7 дней ──
+        week = self._next_days(records, 7)
         if not week:
-            week_text = "На этой неделе именинников нет"
+            week_text = "В ближайшие 7 дней именинников нет"
         else:
-            lines = ["[b]Именинники этой недели:[/b]\n"]
+            lines = ["[b]Ближайшие 7 дней:[/b]\n"]
             for r, bd in week:
-                marker = " 🎉" if bd == today else ""
+                marker = "  ← СЕГОДНЯ" if bd == today else ""
                 lines.append(f"• [b]{r['name']}[/b] — {bd.strftime('%d.%m')}{marker}")
                 if r["position"]:
                     lines.append(f"  [i]{r['position']}[/i]")
             week_text = "\n".join(lines)
 
-        # ── Этот месяц ──
-        month = self._this_month(records)
+        # ── Ближайшие 30 дней ──
+        month = self._next_days(records, 30)
         if not month:
-            month_text = "В этом месяце именинников нет"
+            month_text = "В ближайшие 30 дней именинников нет"
         else:
-            lines = [f"[b]Именинники {today.strftime('%B %Y')}:[/b]\n"]
+            lines = ["[b]Ближайшие 30 дней:[/b]\n"]
             for r, bd in month:
-                marker = " 🎉" if bd == today else ""
+                marker = "  ← СЕГОДНЯ" if bd == today else ""
                 lines.append(f"• [b]{r['name']}[/b] — {bd.strftime('%d.%m')}{marker}")
                 if r["position"]:
                     lines.append(f"  [i]{r['position']}[/i]")
@@ -2270,6 +2282,67 @@ def show_simple_dialog(title, text):
 
     btn.bind(on_release=popup.dismiss)
     popup.open()
+
+def _parse_date_str(s):
+    """Парсит дату из разных форматов. Возвращает date или None."""
+    if not s:
+        return None
+    s = str(s).strip().split()[0]
+    formats = [
+        "%d.%m.%Y", "%d.%m.%y", "%d.%m",
+        "%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y", "%d/%m",
+        "%d-%m-%Y", "%d-%m-%y", "%d-%m",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def count_upcoming_birthdays(days=7):
+    """Сколько сотрудников отмечают ДР в ближайшие N дней (включая сегодня)."""
+    db_path = service_path('birthdays.db')
+    if not os.path.exists(db_path):
+        return 0
+
+    try:
+        con = sqlite3.connect(db_path)
+        cur = con.cursor()
+        cur.execute("SELECT birth_date FROM birthdays")
+        rows = cur.fetchall()
+        con.close()
+    except Exception as e:
+        print(f"count_upcoming_birthdays: {e}")
+        return 0
+
+    today = datetime.now().date()
+    end = today + timedelta(days=days)
+    count = 0
+
+    for (bd_str,) in rows:
+        bd = _parse_date_str(bd_str)
+        if not bd:
+            continue
+
+        # Дата рождения в этом году
+        try:
+            bd_this_year = bd.replace(year=today.year)
+        except ValueError:              # 29.02 → 28.02
+            bd_this_year = bd.replace(year=today.year, day=28)
+
+        # Если уже прошло в этом году — берём следующий год
+        if bd_this_year < today:
+            try:
+                bd_this_year = bd.replace(year=today.year + 1)
+            except ValueError:
+                bd_this_year = bd.replace(year=today.year + 1, day=28)
+
+        if today <= bd_this_year < end:
+            count += 1
+
+    return count
 
 def open_file_chooser(on_select, ext=None, start_path=None):
     """Файловый менеджер: системный (Android) или FileChooserListView (десктоп)."""
