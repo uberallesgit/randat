@@ -40,6 +40,7 @@ from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.uix.filechooser import FileChooserIconView, FileChooserIconLayout
 import os
+from kivymd.uix.label import MDLabel
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
 os.environ['KIVY_GLES_LIMITS'] = '0'
@@ -338,13 +339,14 @@ class WorkerWindow(MDScreen):
     selected = ListProperty([])
 
     def on_kv_post(self, *_):
+        self._all_workers = self._load_workers()
         self.refresh_workers()
 
     # ── Путь к файлу ──
     def _workers_file(self):
         return service_path('worker_list.txt')
 
-    # ── Загрузка списка из файла ──
+    # ── Загрузка из файла ──
     def _load_workers(self):
         path = self._workers_file()
         if not os.path.exists(path):
@@ -352,26 +354,59 @@ class WorkerWindow(MDScreen):
         with open(path, "r", encoding="utf-8") as f:
             return [l.strip() for l in f.readlines() if l.strip()]
 
-    # ── Сохранение списка в файл ──
+    # ── Сохранение в файл ──
     def _save_workers(self, workers):
         with open(self._workers_file(), "w", encoding="utf-8") as f:
             f.write("\n".join(sorted(set(workers))))
+        # Обновляем кэш
+        self._all_workers = sorted(set(workers))
 
-    # ── Обновление списка на экране ──
-    def refresh_workers(self):
+    # ── Пересборка сетки (с учётом фильтра) ──
+    def refresh_workers(self, filter_text=""):
         container = self.ids.checkbox_container
         container.clear_widgets()
 
-        workers = self._load_workers()
+        workers = self._all_workers
+        if filter_text:
+            ft = filter_text.lower().strip()
+            workers = [w for w in workers if ft in w.lower()]
+
         for w in workers:
-            item = CheckboxItem(worker_name=w, callback=self._on_check)
-            # Если сотрудник уже был выбран — восстанавливаем чекбокс
-            if w in self.selected:
-                for child in item.children:
-                    if isinstance(child, LeftCheckbox):
-                        child.active = True
-                        break
-            container.add_widget(item)
+            row = MDBoxLayout(
+                orientation="horizontal",
+                size_hint_y=None,
+                height="44dp",
+                spacing="4dp",
+                padding=["4dp", 0, 0, 0],
+            )
+
+            cb = MDCheckbox(
+                size_hint=(None, None),
+                size=("32dp", "32dp"),
+                active=(w in self.selected),
+                pos_hint={"center_y": .5},
+            )
+            cb.bind(active=lambda inst, val, name=w: self._on_check(inst, val, name))
+
+            lbl = MDLabel(
+                text=w,
+                theme_text_color="Custom",
+                text_color=(0.106, 0.106, 0.118, 1),
+                valign="middle",
+                font_size="13sp",
+                shorten=True,
+                shorten_from="right",
+            )
+
+            row.add_widget(cb)
+            row.add_widget(lbl)
+            container.add_widget(row)
+
+        self._update_selected_label()
+
+    # ── Фильтр при вводе в поиск ──
+    def filter_workers(self, text):
+        self.refresh_workers(text)
 
     # ── Обработка чекбокса ──
     def _on_check(self, instance, value, worker):
@@ -380,13 +415,36 @@ class WorkerWindow(MDScreen):
         elif not value and worker in self.selected:
             self.selected.remove(worker)
 
+        self._update_selected_label()
+        self._sync_to_uber()
+
+    # ── Обновить счётчик ──
+    def _update_selected_label(self):
+        try:
+            self.ids.selected_count_label.text = f"Выбрано: {len(self.selected)}"
+        except Exception:
+            pass
+
+    # ── Передать выбранных на Uber ──
+    def _sync_to_uber(self):
         try:
             uber = self.manager.get_screen('Uber')
             uber.ids.choose_workers_label.text = (
                 ", ".join(self.selected) if self.selected else "Выбрать сотрудников"
             )
         except Exception as e:
-            print(f"WorkerWindow: {e}")
+            print(f"WorkerWindow → Uber: {e}")
+
+    # ── Снять все чекбоксы ──
+    def clear_all_selections(self):
+        self.selected = []
+        self.refresh_workers(self.ids.search_field.text)
+        self._sync_to_uber()
+
+    # ═══ Дальше идут твои методы ═══
+    # add_worker_dialog, delete_worker_dialog, _confirm_delete,
+    # export_workers_xlsx, import_workers_dialog, _on_import_file_selected,
+    # _read_workers_from_file, _ask_import_mode — оставь как есть
 
     # ═══════════════════════════════════════════════════════════
     # КНОПКА «ДОБАВИТЬ СОТРУДНИКА»
@@ -540,7 +598,7 @@ class WorkerWindow(MDScreen):
         def _make_delete_handler(name):
             def _delete(*_):
                 popup.dismiss()
-                self._confirm_delete(name)  # ← с self
+                self._confirm_delete(name)
 
             return _delete
 
@@ -559,6 +617,251 @@ class WorkerWindow(MDScreen):
             list_layout.add_widget(btn)
 
         popup.open()
+
+        # ═══════════════════════════════════════════════════════════
+        # ЭКСПОРТ В .xlsx
+        # ═══════════════════════════════════════════════════════════
+    def export_workers_xlsx(self):
+        """Выгружает список сотрудников в .xlsx."""
+        import platform
+        from datetime import datetime
+        import openpyxl
+
+        workers = self._load_workers()
+        if not workers:
+            show_simple_dialog("Внимание", "Список сотрудников пуст")
+            return
+
+        # Создаём Excel
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Сотрудники"
+        ws.append(["№", "Фамилия"])
+        ws.column_dimensions["A"].width = 6
+        ws.column_dimensions["B"].width = 30
+        for i, w in enumerate(workers, 1):
+            ws.append([i, w])
+
+        # Куда сохранять
+        if platform.system() == "Android":
+            save_dir = "/storage/emulated/0/Download"
+            if not os.path.exists(save_dir):
+                save_dir = "/storage/emulated/0"
+        else:
+            save_dir = os.path.expanduser("~/Downloads")
+            if not os.path.exists(save_dir):
+                save_dir = os.path.expanduser("~")
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        filename = f"workers_{timestamp}.xlsx"
+        save_path = os.path.join(save_dir, filename)
+
+        try:
+            wb.save(save_path)
+            show_simple_dialog(
+                "Готово",
+                f"Файл сохранён:\n{save_path}\n\nВсего: {len(workers)}",
+            )
+        except Exception as e:
+            show_simple_dialog("Ошибка", f"Не удалось сохранить файл:\n{e}")
+
+    # ═══════════════════════════════════════════════════════════
+    # ИМПОРТ ИЗ ТЕКСТОВОГО ФАЙЛА
+    # ═══════════════════════════════════════════════════════════
+    def import_workers_dialog(self):
+        """Открывает файл-менеджер для импорта списка сотрудников."""
+        open_file_chooser(self._on_import_file_selected, ext=None)
+
+    def _on_import_file_selected(self, path):
+        """Вызывается после выбора файла."""
+        workers = self._read_workers_from_file(path)
+        if not workers:
+            show_simple_dialog("Ошибка", "Не удалось прочитать файл или он пуст")
+            return
+        self._ask_import_mode(workers)
+
+    def _read_workers_from_file(self, path):
+        """Читает файл — поддерживает .txt, .csv, .xlsx, .xls."""
+        ext = os.path.splitext(path)[1].lower()
+
+        # ─── Excel ───
+        if ext in ('.xlsx', '.xls'):
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(filename=path, read_only=True, data_only=True)
+                workers = []
+                for sheet in wb.worksheets:
+                    for row in sheet.iter_rows(values_only=True):
+                        for cell in row:
+                            if cell is None:
+                                continue
+                            name = str(cell).strip()
+                            # Пропускаем заголовки, пустые и числа
+                            if not name:
+                                continue
+                            if name.startswith(('№', 'Фамилия', 'Name', 'ID')):
+                                continue
+                            if name.replace('.', '').replace(',', '').isdigit():
+                                continue
+                            workers.append(name)
+                wb.close()
+                return workers
+            except Exception as e:
+                print(f"read xlsx error: {e}")
+                return []
+
+        # ─── Текстовый файл (.txt, .csv, .md и т.д.) ───
+        encodings = ['utf-8', 'cp1251', 'maccyrillic', 'latin-1']
+        best_result = []
+
+        for enc in encodings:
+            try:
+                with open(path, 'r', encoding=enc) as f:
+                    lines = [line.strip() for line in f if line.strip()]
+
+                # Проверяем, что строки похожи на фамилии
+                if self._looks_like_names(lines):
+                    return lines
+
+                # Запоминаем самый длинный результат — на случай, если всё мусор
+                if len(lines) > len(best_result):
+                    best_result = lines
+
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+            except Exception as e:
+                print(f"read error ({enc}): {e}")
+                continue
+
+        return best_result
+
+    def _looks_like_names(self, lines):
+        """Эвристика: строки похожи на фамилии (а не на бинарный мусор)."""
+        if not lines:
+            return False
+
+        sample = lines[:10]
+        good = 0
+
+        for line in sample:
+            # Длина фамилии — от 2 до 40 символов
+            if not (2 <= len(line) <= 40):
+                continue
+
+            # Не менее 60% символов — буквы, пробелы, дефисы
+            letters = sum(1 for ch in line if ch.isalpha() or ch in " -'")
+            if letters / max(len(line), 1) >= 0.6:
+                good += 1
+
+        # Хотя бы половина строк похожа на имена
+        return good >= max(1, len(sample) // 2)
+
+    def _ask_import_mode(self, new_workers):
+        """Спрашивает: дополнить или заменить существующий список."""
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.metrics import dp
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=[dp(12)] * 4,
+        )
+
+        msg = Label(
+            text=(f"Найдено сотрудников: {len(new_workers)}\n\n"
+                  f"Дополнить существующий список или заменить его?"),
+            color=(0.106, 0.106, 0.118, 1),
+            halign="center",
+            valign="middle",
+        )
+        msg.bind(size=lambda s, w: setattr(s, "text_size", w))
+        content.add_widget(msg)
+
+        buttons = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+        )
+
+        popup = Popup(
+            title="Импорт сотрудников",
+            title_color=(0.42, 0.16, 0.85, 1),
+            title_size=dp(16),
+            separator_color=(0.85, 0.85, 0.85, 1),
+            content=content,
+            size_hint=(0.9, 0.4),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=True,
+        )
+
+        def _append(*_):
+            popup.dismiss()
+            current = self._load_workers()
+            before = len(current)
+            merged = sorted(set(current) | set(new_workers))
+            self._save_workers(merged)
+            self.refresh_workers()
+            added = len(merged) - before
+            show_simple_dialog(
+                "Готово",
+                f"Добавлено: {added}\nВсего в списке: {len(merged)}",
+            )
+
+        def _replace(*_):
+            popup.dismiss()
+            unique = sorted(set(new_workers))
+            self._save_workers(unique)
+            self.refresh_workers()
+            show_simple_dialog(
+                "Готово",
+                f"Список заменён.\nВсего: {len(unique)}",
+            )
+
+        def _cancel(*_):
+            popup.dismiss()
+
+        btn_append = Button(
+            text="ДОПОЛНИТЬ",
+            background_normal="",
+            background_color=(0.42, 0.16, 0.85, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+            font_size=dp(13),
+        )
+        btn_append.bind(on_release=_append)
+
+        btn_replace = Button(
+            text="ЗАМЕНИТЬ",
+            background_normal="",
+            background_color=(0.9, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+            font_size=dp(13),
+        )
+        btn_replace.bind(on_release=_replace)
+
+        btn_cancel = Button(
+            text="ОТМЕНА",
+            background_normal="",
+            background_color=(0.6, 0.6, 0.6, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+            font_size=dp(13),
+        )
+        btn_cancel.bind(on_release=_cancel)
+
+        buttons.add_widget(btn_append)
+        buttons.add_widget(btn_replace)
+        buttons.add_widget(btn_cancel)
+        content.add_widget(buttons)
+
+        popup.open()
+
+
 
     def _confirm_delete(self, name):
         """Подтверждение удаления."""

@@ -60,18 +60,14 @@
     left_action_2: lambda: None
     right_icon: ""
     right_action: lambda: None
+    right_icon_2: ""
+    right_action_2: lambda: None
     orientation: "horizontal"
     size_hint_y: None
     height: SIZE_BAR
     padding: SPACE_XS, 0
     spacing: 0
-    #md_background_color: COLOR_HEADER
-    canvas.before:
-        Color:
-            rgba: COLOR_HEADER
-        Rectangle:
-            pos: self.pos
-            size: self.size
+    md_bg_color: COLOR_HEADER
 
     MDIconButton:
         icon: root.left_icon or "checkbox-blank-circle-outline"
@@ -100,7 +96,17 @@
         padding: SPACE_SM, 0
 
     Widget:
-        # прижимает правую иконку (если есть) к краю
+        # растяжка — прижимает правые иконки к краю
+
+    MDIconButton:
+        icon: root.right_icon_2 or "checkbox-blank-circle-outline"
+        opacity: 1 if root.right_icon_2 else 0
+        disabled: not root.right_icon_2
+        size_hint_x: None
+        width: "48dp" if root.right_icon_2 else "0dp"
+        theme_text_color: "Custom"
+        text_color: COLOR_ON_DARK
+        on_release: root.right_action_2()
 
     MDIconButton:
         icon: root.right_icon or "checkbox-blank-circle-outline"
@@ -235,12 +241,69 @@
             title: "Выбор сотрудников"
             left_icon: "arrow-left"
             left_action: lambda: app.go_back("Uber")
+            right_icon: "upload"
+            right_action: lambda: root.import_workers_dialog()
+            right_icon_2: "download"
+            right_action_2: lambda: root.export_workers_xlsx()
 
+        # ── Поиск ──
+        MDBoxLayout:
+            size_hint_y: None
+            height: "76dp"
+            padding: [SPACE_MD, "20dp", SPACE_MD, SPACE_XS]
+
+            MDTextField:
+                id: search_field
+                hint_text: "Поиск по фамилии…"
+                mode: "rectangle"
+                on_text: root.filter_workers(self.text)
+
+        # ── Счётчик + Снять все ──
+        MDBoxLayout:
+            size_hint_y: None
+            height: "36dp"
+            padding: SPACE_MD, 0
+            spacing: SPACE_SM
+
+            MDLabel:
+                id: selected_count_label
+                text: "Выбрано: 0"
+                theme_text_color: "Custom"
+                text_color: COLOR_DARK
+                font_size: "14sp"
+                valign: "middle"
+
+            Widget:
+
+            RoundedButton:
+                text: "Снять все"
+                size_hint_x: None
+                size_hint_y: None
+                width: "110dp"
+                height: "32dp"
+                pos_hint: {"center_y": .5}
+                background_color: COLOR_DARK
+                color: COLOR_ON_DARK
+                font_size: "12sp"
+                on_release: root.clear_all_selections()
+
+        # ── Сетка чекбоксов ── ← ГЛАВНОЕ: id здесь
         MDScrollView:
-            MDList:
-                id: checkbox_container
+            do_scroll_x: False
+            do_scroll_y: True
+            bar_width: "4dp"
 
-        # ── Нижняя панель: добавить / удалить ──
+            MDGridLayout:
+                id: checkbox_container
+                cols: 2
+                spacing: "4dp"
+                padding: SPACE_SM
+                size_hint_y: None
+                height: self.minimum_height
+                row_default_height: "44dp"
+                row_force_default: True
+
+        # ── Нижние кнопки ──
         MDBoxLayout:
             orientation: "horizontal"
             size_hint_y: None
