@@ -287,10 +287,13 @@
                 size_hint_y: 0.85
                 md_background_color: COLOR_SURFACE
 
-                SelectableLabel:
-                    id: crwo_text_output
-                    text: ""
-                    font_size: "15sp"
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+                    MDTextField:
+                        id: crwo_text_output
+                        input_type: "text"  # 👈 Добавь эту строку
+                        multiline: True
 
             MDBoxLayout:
                 size_hint_y: None
