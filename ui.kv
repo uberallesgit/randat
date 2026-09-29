@@ -58,6 +58,8 @@
     left_action: lambda: None
     left_icon_2: ""
     left_action_2: lambda: None
+    left_icon_3: ""
+    left_action_3: lambda: None
     right_icon: ""
     right_action: lambda: None
     right_icon_2: ""
@@ -86,6 +88,16 @@
         theme_text_color: "Custom"
         text_color: COLOR_ON_DARK
         on_release: root.left_action_2()
+
+    MDIconButton:
+        icon: root.left_icon_3 or "checkbox-blank-circle-outline"
+        opacity: 1 if root.left_icon_3 else 0
+        disabled: not root.left_icon_3
+        size_hint_x: None
+        width: "48dp" if root.left_icon_3 else "0dp"
+        theme_text_color: "Custom"
+        text_color: COLOR_ON_DARK
+        on_release: root.left_action_3()
 
     MDLabel:
         text: root.title
@@ -148,6 +160,8 @@
             left_action: lambda: app.go_to("SettingsWindow")
             left_icon_2: "radio-tower"
             left_action_2: lambda: app.go_to("TorusWindow")
+            left_icon_3: "account-group"
+            left_action_3: lambda: app.go_to("BirthdayWindow")
             right_icon: "swap-horizontal"
             right_action: lambda: app.go_to("Uber")
 
@@ -873,6 +887,83 @@
 
 <CheckboxItem>:
     theme_text_color: "Primary"
+
+# ────────────────────────────────────────────────────────────────
+# BIRTHDAY — дни рождения сотрудников
+# ────────────────────────────────────────────────────────────────
+<BirthdayWindow>:
+    name: "BirthdayWindow"
+
+    MDBoxLayout:
+        orientation: "vertical"
+        md_bg_color: COLOR_BG
+
+        ScreenHeader:
+            title: "Дни рождения"
+            left_icon: "arrow-left"
+            left_action: lambda: app.go_back("Gooranda")
+            right_icon: "upload"
+            right_action: lambda: root.import_birthdays_dialog()
+
+        MDTabs:
+            id: birthday_tabs
+
+            MyTab:
+                title: "Эта неделя"
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+                    bar_width: "4dp"
+
+                    MDLabel:
+                        id: week_tab
+                        text: "Загрузка…"
+                        markup: True
+                        theme_text_color: "Custom"
+                        text_color: COLOR_DARK
+                        font_size: "15sp"
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text_size: self.width, None
+                        padding: SPACE_MD, SPACE_SM
+
+            MyTab:
+                title: "Этот месяц"
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+                    bar_width: "4dp"
+
+                    MDLabel:
+                        id: month_tab
+                        text: "Загрузка…"
+                        markup: True
+                        theme_text_color: "Custom"
+                        text_color: COLOR_DARK
+                        font_size: "15sp"
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text_size: self.width, None
+                        padding: SPACE_MD, SPACE_SM
+
+            MyTab:
+                title: "Все"
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+                    bar_width: "4dp"
+
+                    MDLabel:
+                        id: all_tab
+                        text: "Загрузка…"
+                        markup: True
+                        theme_text_color: "Custom"
+                        text_color: COLOR_DARK
+                        font_size: "14sp"
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text_size: self.width, None
+                        padding: SPACE_MD, SPACE_SM
 
 
 # ────────────────────────────────────────────────────────────────

@@ -41,6 +41,9 @@ from kivy.clock import Clock
 from kivy.uix.filechooser import FileChooserIconView, FileChooserIconLayout
 import os
 from kivymd.uix.label import MDLabel
+import sqlite3
+import re
+
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
 os.environ['KIVY_GLES_LIMITS'] = '0'
@@ -1599,6 +1602,385 @@ class NetworkTabsWindow(MDScreen):
 
 
 # ────────────────────────────────────────────────────────────────
+# BIRTHDAY — именинники и дни рождения сотрудников
+# ────────────────────────────────────────────────────────────────
+class BirthdayWindow(MDScreen):
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.dialog = None
+        self._init_db()
+
+    # ── Путь к БД ──
+    def _db_path(self):
+        return service_path('birthdays.db')
+
+    # ── Создание таблицы ──
+    def _init_db(self):
+        try:
+            con = sqlite3.connect(self._db_path())
+            cur = con.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS birthdays (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    position TEXT,
+                    name TEXT,
+                    birth_date TEXT
+                )
+            """)
+            con.commit()
+            con.close()
+        except Exception as e:
+            print(f"_init_db: {e}")
+
+    def on_kv_post(self, *_):
+        self.refresh_tabs()
+
+    # ── Загрузка записей из БД ──
+    def _load_records(self):
+        try:
+            con = sqlite3.connect(self._db_path())
+            cur = con.cursor()
+            cur.execute("SELECT position, name, birth_date FROM birthdays")
+            rows = cur.fetchall()
+            con.close()
+            return [{"position": r[0] or "", "name": r[1] or "", "birth_date": r[2] or ""} for r in rows]
+        except Exception as e:
+            print(f"_load_records: {e}")
+            return []
+
+    # ── Парсинг даты из разных форматов ──
+    def _parse_date(self, s):
+        if not s:
+            return None
+        s = str(s).strip()
+        # Убираем время, если есть
+        s = s.split()[0]
+        formats = [
+            "%d.%m.%Y", "%d.%m.%y", "%d.%m",
+            "%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y", "%d/%m",
+            "%d-%m-%Y", "%d-%m-%y", "%d-%m",
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(s, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    # ── Список именинников на текущей неделе ──
+    def _this_week(self, records):
+        today = datetime.now().date()
+        start = today - timedelta(days=today.weekday())   # понедельник
+        end = start + timedelta(days=6)                    # воскресенье
+        result = []
+        for r in records:
+            bd = self._parse_date(r["birth_date"])
+            if not bd:
+                continue
+            try:
+                bd_this_year = bd.replace(year=today.year)
+            except ValueError:      # 29 февраля → 28
+                bd_this_year = bd.replace(year=today.year, day=28)
+            if start <= bd_this_year <= end:
+                result.append((r, bd_this_year))
+        result.sort(key=lambda x: x[1])
+        return result
+
+    # ── Список именинников в текущем месяце ──
+    def _this_month(self, records):
+        today = datetime.now().date()
+        result = []
+        for r in records:
+            bd = self._parse_date(r["birth_date"])
+            if not bd:
+                continue
+            if bd.month == today.month:
+                try:
+                    bd_this_year = bd.replace(year=today.year)
+                except ValueError:
+                    bd_this_year = bd.replace(year=today.year, day=28)
+                result.append((r, bd_this_year))
+        result.sort(key=lambda x: (x[1].day, x[1].month))
+        return result
+
+    # ── Обновление трёх вкладок ──
+    def refresh_tabs(self):
+        records = self._load_records()
+        today = datetime.now().date()
+
+        # ── Эта неделя ──
+        week = self._this_week(records)
+        if not week:
+            week_text = "На этой неделе именинников нет"
+        else:
+            lines = ["[b]Именинники этой недели:[/b]\n"]
+            for r, bd in week:
+                marker = " 🎉" if bd == today else ""
+                lines.append(f"• [b]{r['name']}[/b] — {bd.strftime('%d.%m')}{marker}")
+                if r["position"]:
+                    lines.append(f"  [i]{r['position']}[/i]")
+            week_text = "\n".join(lines)
+
+        # ── Этот месяц ──
+        month = self._this_month(records)
+        if not month:
+            month_text = "В этом месяце именинников нет"
+        else:
+            lines = [f"[b]Именинники {today.strftime('%B %Y')}:[/b]\n"]
+            for r, bd in month:
+                marker = " 🎉" if bd == today else ""
+                lines.append(f"• [b]{r['name']}[/b] — {bd.strftime('%d.%m')}{marker}")
+                if r["position"]:
+                    lines.append(f"  [i]{r['position']}[/i]")
+            month_text = "\n".join(lines)
+
+        # ── Все ──
+        if not records:
+            all_text = "Список пуст.\nНажмите ⬆ в шапке, чтобы загрузить файл."
+        else:
+            lines = [f"[b]Всего записей: {len(records)}[/b]\n"]
+            for r in sorted(records, key=lambda x: x["name"].lower()):
+                bd = self._parse_date(r["birth_date"])
+                bd_str = bd.strftime("%d.%m.%Y") if bd else r["birth_date"] or "—"
+                lines.append(f"• [b]{r['name']}[/b] — {bd_str}")
+                if r["position"]:
+                    lines.append(f"  [i]{r['position']}[/i]")
+            all_text = "\n".join(lines)
+
+        try:
+            self.ids.week_tab.text = week_text
+            self.ids.month_tab.text = month_text
+            self.ids.all_tab.text = all_text
+        except Exception as e:
+            print(f"refresh_tabs: {e}")
+
+    # ── Импорт из Excel / CSV ──
+    def import_birthdays_dialog(self):
+        open_file_chooser(self._on_file_selected, ext=[".xlsx", ".xls", ".csv"])
+
+    def _on_file_selected(self, path):
+        if not path:
+            return
+        ext = os.path.splitext(path)[1].lower()
+        try:
+            if ext in (".xlsx", ".xls"):
+                rows = self._read_excel(path)
+            else:
+                rows = self._read_csv(path)
+        except Exception as e:
+            show_simple_dialog("Ошибка", f"Не удалось прочитать файл:\n{e}")
+            return
+
+        if not rows:
+            show_simple_dialog("Ошибка", "В файле не найдено данных")
+            return
+
+        # Спрашиваем: дополнить или заменить
+        self._ask_import_mode(rows)
+
+    def _read_excel(self, path):
+        """Читает .xlsx через openpyxl. Если не получилось — пробует .xls, потом CSV."""
+        import openpyxl
+        try:
+            wb = openpyxl.load_workbook(filename=path, data_only=True)
+            ws = wb.active
+            rows = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i == 0:
+                    continue
+                if not row:
+                    continue
+                pos, name, bd = (list(row) + [None, None, None])[:3]
+                name = str(name).strip() if name else ""
+                if not name:
+                    continue
+                rows.append({
+                    "position": str(pos).strip() if pos else "",
+                    "name": name,
+                    "birth_date": str(bd).strip() if bd else "",
+                })
+            wb.close()
+            if rows:
+                return rows
+        except Exception as e:
+            print(f"openpyxl failed: {e}")
+
+        # Fallback 1: старый .xls
+        rows = self._read_xls(path)
+        if rows:
+            return rows
+
+        # Fallback 2: попробуем как CSV (файл мог быть переименован)
+        print("trying as CSV...")
+        return self._read_csv(path)
+
+    def _read_xls(self, path):
+        """Читает старый .xls (OLE2 / BIFF) через xlrd."""
+        try:
+            import xlrd
+        except ImportError:
+            print("xlrd не установлен — .xls не поддерживается")
+            return []
+
+        try:
+            wb = xlrd.open_workbook(path)
+            ws = wb.sheet_by_index(0)
+            rows = []
+            for i in range(1, ws.nrows):     # пропускаем заголовок
+                row = ws.row_values(i)
+                if not row or len(row) < 2:
+                    continue
+                pos = str(row[0]).strip() if len(row) > 0 and row[0] else ""
+                name = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+                bd = str(row[2]).strip() if len(row) > 2 and row[2] else ""
+
+                # xlrd может вернуть дату как float (Excel serial date)
+                if len(row) > 2 and isinstance(row[2], float):
+                    try:
+                        bd = xlrd.xldate_as_datetime(row[2], wb.datemode).strftime("%d.%m.%Y")
+                    except Exception:
+                        pass
+
+                if not name:
+                    continue
+                rows.append({"position": pos, "name": name, "birth_date": bd})
+            wb.release_resources()
+            return rows
+        except Exception as e:
+            print(f"xlrd failed: {e}")
+            return []
+
+    def _read_csv(self, path):
+        encodings = ["utf-8", "cp1251", "maccyrillic", "latin-1"]
+        for enc in encodings:
+            try:
+                with open(path, "r", encoding=enc) as f:
+                    import csv
+                    # Пробуем определить разделитель
+                    sample = f.read(2048)
+                    f.seek(0)
+                    delim = ";" if sample.count(";") > sample.count(",") else ","
+                    reader = csv.reader(f, delimiter=delim)
+                    rows = []
+                    for i, row in enumerate(reader):
+                        if i == 0:
+                            continue
+                        if not row or len(row) < 2:
+                            continue
+                        pos = row[0].strip() if len(row) > 0 else ""
+                        name = row[1].strip() if len(row) > 1 else ""
+                        bd = row[2].strip() if len(row) > 2 else ""
+                        if not name:
+                            continue
+                        rows.append({"position": pos, "name": name, "birth_date": bd})
+                    return rows
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+            except Exception as e:
+                print(f"_read_csv ({enc}): {e}")
+                continue
+        return []
+
+    # ── Спросить: дополнить или заменить ──
+    def _ask_import_mode(self, new_rows):
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.metrics import dp
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=[dp(12)] * 4,
+        )
+
+        msg = Label(
+            text=(f"Найдено записей: {len(new_rows)}\n\n"
+                  f"Дополнить существующую базу или заменить её?"),
+            color=(0.106, 0.106, 0.118, 1),
+            halign="center",
+            valign="middle",
+        )
+        msg.bind(size=lambda s, w: setattr(s, "text_size", w))
+        content.add_widget(msg)
+
+        buttons = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+        )
+
+        popup = Popup(
+            title="Импорт дней рождения",
+            title_color=(0.42, 0.16, 0.85, 1),
+            title_size=dp(16),
+            separator_color=(0.85, 0.85, 0.85, 1),
+            content=content,
+            size_hint=(0.9, 0.4),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=True,
+        )
+
+        def _append(*_):
+            popup.dismiss()
+            self._save_to_db(new_rows, replace=False)
+            self.refresh_tabs()
+            show_simple_dialog("Готово", f"Добавлено: {len(new_rows)}")
+
+        def _replace(*_):
+            popup.dismiss()
+            self._save_to_db(new_rows, replace=True)
+            self.refresh_tabs()
+            show_simple_dialog("Готово", f"База обновлена: {len(new_rows)} записей")
+
+        def _cancel(*_):
+            popup.dismiss()
+
+        btn_append = Button(
+            text="ДОПОЛНИТЬ", background_normal="",
+            background_color=(0.42, 0.16, 0.85, 1),
+            color=(1, 1, 1, 1), bold=True, font_size=dp(13),
+        )
+        btn_append.bind(on_release=_append)
+
+        btn_replace = Button(
+            text="ЗАМЕНИТЬ", background_normal="",
+            background_color=(0.9, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1), bold=True, font_size=dp(13),
+        )
+        btn_replace.bind(on_release=_replace)
+
+        btn_cancel = Button(
+            text="ОТМЕНА", background_normal="",
+            background_color=(0.6, 0.6, 0.6, 1),
+            color=(1, 1, 1, 1), bold=True, font_size=dp(13),
+        )
+        btn_cancel.bind(on_release=_cancel)
+
+        buttons.add_widget(btn_append)
+        buttons.add_widget(btn_replace)
+        buttons.add_widget(btn_cancel)
+        content.add_widget(buttons)
+        popup.open()
+
+    def _save_to_db(self, rows, replace=False):
+        con = sqlite3.connect(self._db_path())
+        cur = con.cursor()
+        if replace:
+            cur.execute("DELETE FROM birthdays")
+        for r in rows:
+            cur.execute(
+                "INSERT INTO birthdays (position, name, birth_date) VALUES (?, ?, ?)",
+                (r["position"], r["name"], r["birth_date"]),
+            )
+        con.commit()
+        con.close()
+
+
+# ────────────────────────────────────────────────────────────────
 # КОРНЕВОЙ SCREEN MANAGER
 # ────────────────────────────────────────────────────────────────
 class WindowManager(MDScreenManager):
@@ -1677,6 +2059,7 @@ class UberGoorandaApp(MDApp):
         sm.add_widget(SettingsWindow(name="SettingsWindow"))
         sm.add_widget(TorusWindow(name="TorusWindow"))
         sm.add_widget(NetworkTabsWindow(name="NetworkTabsWindow"))
+        sm.add_widget(BirthdayWindow(name="BirthdayWindow"))
 
         Window.softinput_mode = 'below_target'
         Window.softinput_mode_target_margin = dp(20)  # 20dp запаса
