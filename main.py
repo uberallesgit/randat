@@ -338,14 +338,42 @@ class WorkerWindow(MDScreen):
     selected = ListProperty([])
 
     def on_kv_post(self, *_):
-        txt_path = resource_path(os.path.join('service', 'worker_list.txt'))
-        with open(txt_path, "r", encoding="utf-8") as f:
-            workers = [l.strip() for l in f.readlines() if l.strip()]
+        self.refresh_workers()
 
+    # ── Путь к файлу ──
+    def _workers_file(self):
+        return service_path('worker_list.txt')
+
+    # ── Загрузка списка из файла ──
+    def _load_workers(self):
+        path = self._workers_file()
+        if not os.path.exists(path):
+            return []
+        with open(path, "r", encoding="utf-8") as f:
+            return [l.strip() for l in f.readlines() if l.strip()]
+
+    # ── Сохранение списка в файл ──
+    def _save_workers(self, workers):
+        with open(self._workers_file(), "w", encoding="utf-8") as f:
+            f.write("\n".join(sorted(set(workers))))
+
+    # ── Обновление списка на экране ──
+    def refresh_workers(self):
+        container = self.ids.checkbox_container
+        container.clear_widgets()
+
+        workers = self._load_workers()
         for w in workers:
             item = CheckboxItem(worker_name=w, callback=self._on_check)
-            self.ids.checkbox_container.add_widget(item)
+            # Если сотрудник уже был выбран — восстанавливаем чекбокс
+            if w in self.selected:
+                for child in item.children:
+                    if isinstance(child, LeftCheckbox):
+                        child.active = True
+                        break
+            container.add_widget(item)
 
+    # ── Обработка чекбокса ──
     def _on_check(self, instance, value, worker):
         if value and worker not in self.selected:
             self.selected.append(worker)
@@ -359,6 +387,262 @@ class WorkerWindow(MDScreen):
             )
         except Exception as e:
             print(f"WorkerWindow: {e}")
+
+    # ═══════════════════════════════════════════════════════════
+    # КНОПКА «ДОБАВИТЬ СОТРУДНИКА»
+    # ═══════════════════════════════════════════════════════════
+    def add_worker_dialog(self):
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.textinput import TextInput
+        from kivy.metrics import dp
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=[dp(12)] * 4,
+        )
+
+        title_label = Label(
+            text="Введите фамилию нового сотрудника:",
+            size_hint_y=None,
+            height=dp(30),
+            color=(0.106, 0.106, 0.118, 1),
+        )
+        content.add_widget(title_label)
+
+        name_input = TextInput(
+            multiline=False,
+            size_hint_y=None,
+            height=dp(48),
+            background_color=(0.95, 0.95, 0.97, 1),
+            foreground_color=(0.106, 0.106, 0.118, 1),
+            cursor_color=(0.42, 0.16, 0.85, 1),
+            font_size=dp(16),
+            padding=[dp(10), dp(10), dp(10), dp(10)],
+        )
+        content.add_widget(name_input)
+
+        buttons = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+        )
+
+        popup = Popup(
+            title="Добавить сотрудника",
+            title_color=(0.42, 0.16, 0.85, 1),
+            title_size=dp(16),
+            separator_color=(0.85, 0.85, 0.85, 1),
+            content=content,
+            size_hint=(0.85, 0.45),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=True,
+        )
+
+        def _save(*_):
+            name = name_input.text.strip()
+            if not name:
+                popup.dismiss()
+                return
+
+            workers = self._load_workers()
+            if name in workers:
+                show_simple_dialog("Внимание", f"Сотрудник «{name}» уже есть в списке")
+                return
+
+            workers.append(name)
+            self._save_workers(workers)
+            popup.dismiss()
+            self.refresh_workers()
+
+        def _cancel(*_):
+            popup.dismiss()
+
+        btn_ok = Button(
+            text="ДОБАВИТЬ",
+            background_normal="",
+            background_color=(0.42, 0.16, 0.85, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_ok.bind(on_release=_save)
+
+        btn_cancel = Button(
+            text="ОТМЕНА",
+            background_normal="",
+            background_color=(0.9, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_cancel.bind(on_release=_cancel)
+
+        buttons.add_widget(btn_ok)
+        buttons.add_widget(btn_cancel)
+        content.add_widget(buttons)
+
+        popup.open()
+
+    # ═══════════════════════════════════════════════════════════
+    # КНОПКА «УДАЛИТЬ СОТРУДНИКА»
+    # ═══════════════════════════════════════════════════════════
+    def delete_worker_dialog(self):
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.scrollview import ScrollView
+        from kivy.metrics import dp
+
+        workers = self._load_workers()
+        if not workers:
+            show_simple_dialog("Внимание", "Список сотрудников пуст")
+            return
+
+        # Прокручиваемый список
+        list_layout = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            spacing=dp(2),
+        )
+        list_layout.bind(minimum_height=list_layout.setter("height"))
+
+        scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        scroll.add_widget(list_layout)
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=[dp(8)] * 4,
+        )
+        content.add_widget(Label(
+            text="Тапните по фамилии, чтобы удалить:",
+            size_hint_y=None,
+            height=dp(30),
+            color=(0.106, 0.106, 0.118, 1),
+        ))
+        content.add_widget(scroll)
+
+        popup = Popup(
+            title="Удалить сотрудника",
+            title_color=(0.85, 0.2, 0.2, 1),
+            title_size=dp(16),
+            separator_color=(0.85, 0.85, 0.85, 1),
+            content=content,
+            size_hint=(0.85, 0.7),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=True,
+        )
+
+        def _make_delete_handler(name):
+            def _delete(*_):
+                popup.dismiss()
+                self._confirm_delete(name)  # ← с self
+
+            return _delete
+
+        for w in workers:
+            btn = Button(
+                text=w,
+                size_hint_y=None,
+                height=dp(48),
+                background_normal="",
+                background_down="",
+                background_color=(0.95, 0.95, 0.97, 1),
+                color=(0.106, 0.106, 0.118, 1),
+                font_size=dp(15),
+            )
+            btn.bind(on_release=_make_delete_handler(w))
+            list_layout.add_widget(btn)
+
+        popup.open()
+
+    def _confirm_delete(self, name):
+        """Подтверждение удаления."""
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.metrics import dp
+
+        content = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=[dp(12)] * 4,
+        )
+        content.add_widget(Label(
+            text=f"Удалить сотрудника «{name}»?",
+            color=(0.106, 0.106, 0.118, 1),
+        ))
+
+        buttons = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+        )
+
+        popup = Popup(
+            title="Подтверждение",
+            title_color=(0.85, 0.2, 0.2, 1),
+            title_size=dp(16),
+            separator_color=(0.85, 0.85, 0.85, 1),
+            content=content,
+            size_hint=(0.8, 0.3),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=True,
+        )
+
+        def _yes(*_):
+            workers = self._load_workers()
+            if name in workers:
+                workers.remove(name)
+                self._save_workers(workers)
+
+            # Убираем из выбранных, если был выбран
+            if name in self.selected:
+                self.selected.remove(name)
+                try:
+                    uber = self.manager.get_screen('Uber')
+                    uber.ids.choose_workers_label.text = (
+                        ", ".join(self.selected) if self.selected
+                        else "Выбрать сотрудников"
+                    )
+                except Exception:
+                    pass
+
+            popup.dismiss()
+            self.refresh_workers()
+
+        def _no(*_):
+            popup.dismiss()
+
+        btn_yes = Button(
+            text="УДАЛИТЬ",
+            background_normal="",
+            background_color=(0.9, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_yes.bind(on_release=_yes)
+
+        btn_no = Button(
+            text="ОТМЕНА",
+            background_normal="",
+            background_color=(0.6, 0.6, 0.6, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_no.bind(on_release=_no)
+
+        buttons.add_widget(btn_yes)
+        buttons.add_widget(btn_no)
+        content.add_widget(buttons)
+
+        popup.open()
 
 
 # ────────────────────────────────────────────────────────────────

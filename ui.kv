@@ -229,7 +229,7 @@
 
     MDBoxLayout:
         orientation: "vertical"
-        md_background_color: COLOR_BG
+        md_bg_color: COLOR_BG
 
         ScreenHeader:
             title: "Выбор сотрудников"
@@ -239,6 +239,26 @@
         MDScrollView:
             MDList:
                 id: checkbox_container
+
+        # ── Нижняя панель: добавить / удалить ──
+        MDBoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: SIZE_ROW
+            spacing: SPACE_SM
+            padding: SPACE_SM
+
+            RoundedButton:
+                text: "+ Добавить сотрудника"
+                background_color: COLOR_PRIMARY
+                color: COLOR_ON_DARK
+                on_release: root.add_worker_dialog()
+
+            RoundedButton:
+                text: "− Удалить сотрудника"
+                background_color: COLOR_DANGER
+                color: COLOR_ON_DARK
+                on_release: root.delete_worker_dialog()
 
 
 # ────────────────────────────────────────────────────────────────
