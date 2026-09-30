@@ -152,14 +152,24 @@ MIN_PASSWORD_LENGTH = 6
 class LoginWindow(MDScreen):
     """Поля: Имя, Фамилия, Пароль. Кнопки: Войти / Зарегистрироваться."""
 
-    def on_pre_enter(self, *args):
-        """Обновляем бейдж на иконке людей."""
-        try:
-            count = count_upcoming_birthdays(7)
-            print(f"[Gooranda] именинников в ближайшие 7 дней: {count}")
-            self.ids.gooranda_header.badge_text = str(count) if count > 0 else ""
-        except Exception as e:
-            print(f"on_pre_enter badge: {e}")
+    # def on_enter(self, *args):
+    #     print("=== GoorandaWindow.on_enter ===")  # ← добавить
+    #     """Обновляем бейдж и показываем именинников ближайших 7 дней."""
+    #     try:
+    #         count = count_upcoming_birthdays(7)
+    #         print(f"[Gooranda] count={count}")  # ← добавить
+    #         self.ids.gooranda_header.badge_text = str(count) if count > 0 else ""
+    #         print(f"[Gooranda] badge_text={self.ids.gooranda_header.badge_text!r}")  # ← добавить
+    #     except Exception as e:
+    #         print(f"on_enter badge: {e}")
+    #
+    #     try:
+    #         if not self.ids.output_text.text.strip():
+    #             text = build_upcoming_birthdays_text(7)
+    #             print(f"[Gooranda] birthdays text len={len(text)}")  # ← добавить
+    #             self.ids.output_text.text = text
+    #     except Exception as e:
+    #         print(f"on_enter birthdays text: {e}")
 
     def set_error(self, text: str) -> None:
         self.ids.error_label.text = text
@@ -227,6 +237,36 @@ class GoorandaWindow(MDScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.dialog = None
+
+    def on_kv_post(self, base_widget):
+        """Вызывается после построения всех kv-правил.
+        Обновляем бейдж и показываем именинников через небольшую задержку,
+        чтобы ids и виджеты были точно готовы."""
+        from kivy.clock import Clock
+        Clock.schedule_once(self._refresh_birthdays_ui, 0.2)
+
+    def _refresh_birthdays_ui(self, *args):
+        """Обновляет бейдж и output_text с именинниками."""
+        print("=== _refresh_birthdays_ui вызван ===")
+
+        # ── Бейдж ──
+        try:
+            count = count_upcoming_birthdays(7)
+            print(f"[Gooranda] count={count}")
+            self.ids.gooranda_header.badge_text = str(count) if count > 0 else ""
+            print(f"[Gooranda] badge_text={self.ids.gooranda_header.badge_text!r}")
+        except Exception as e:
+            print(f"_refresh badge: {e}")
+
+        # ── output_text ──
+        try:
+            if not self.ids.output_text.text.strip():
+                text = build_upcoming_birthdays_text(7)
+                print(f"[Gooranda] text len={len(text)}")
+                if text:
+                    self.ids.output_text.text = text
+        except Exception as e:
+            print(f"_refresh output_text: {e}")
 
     def on_pre_enter(self, *args):
         """Обновляем бейдж на иконке людей."""
@@ -482,6 +522,7 @@ class WorkerWindow(MDScreen):
 
         title_label = Label(
             text="Введите фамилию нового сотрудника:",
+
             size_hint_y=None,
             height=dp(30),
             color=(0.106, 0.106, 0.118, 1),
@@ -490,6 +531,7 @@ class WorkerWindow(MDScreen):
 
         name_input = TextInput(
             multiline=False,
+            input_type='text', # 👈 Добавил
             size_hint_y=None,
             height=dp(48),
             background_color=(0.95, 0.95, 0.97, 1),
@@ -2304,45 +2346,120 @@ def _parse_date_str(s):
 def count_upcoming_birthdays(days=7):
     """Сколько сотрудников отмечают ДР в ближайшие N дней (включая сегодня)."""
     db_path = service_path('birthdays.db')
+    print(f"[count] db_path = {db_path}")
+    print(f"[count] exists = {os.path.exists(db_path)}")
+
     if not os.path.exists(db_path):
         return 0
 
     try:
         con = sqlite3.connect(db_path)
         cur = con.cursor()
-        cur.execute("SELECT birth_date FROM birthdays")
+        cur.execute("SELECT name, birth_date FROM birthdays")
         rows = cur.fetchall()
         con.close()
     except Exception as e:
-        print(f"count_upcoming_birthdays: {e}")
+        print(f"[count] ошибка чтения БД: {e}")
         return 0
+
+    print(f"[count] записей в БД: {len(rows)}")
 
     today = datetime.now().date()
     end = today + timedelta(days=days)
+    print(f"[count] сегодня={today}, конец диапазона={end}")
     count = 0
 
-    for (bd_str,) in rows:
+    for (name, bd_str) in rows:
         bd = _parse_date_str(bd_str)
         if not bd:
+            print(f"[count]   '{name}' — дата '{bd_str}' НЕ распарсилась")
             continue
 
-        # Дата рождения в этом году
         try:
             bd_this_year = bd.replace(year=today.year)
-        except ValueError:              # 29.02 → 28.02
+        except ValueError:
             bd_this_year = bd.replace(year=today.year, day=28)
 
-        # Если уже прошло в этом году — берём следующий год
         if bd_this_year < today:
             try:
                 bd_this_year = bd.replace(year=today.year + 1)
             except ValueError:
                 bd_this_year = bd.replace(year=today.year + 1, day=28)
 
-        if today <= bd_this_year < end:
+        print(f"[count]   '{name}' — {bd} → {bd_this_year}")
+
+        if today <= bd_this_year <= end:
             count += 1
 
+    print(f"[count] итог: {count}")
     return count
+
+def build_upcoming_birthdays_text(days=7):
+    """Формирует текст со списком именинников ближайших N дней (без markup)."""
+    db_path = service_path('birthdays.db')
+    if not os.path.exists(db_path):
+        return ""
+
+    try:
+        con = sqlite3.connect(db_path)
+        cur = con.cursor()
+        cur.execute("SELECT name, position, birth_date FROM birthdays")
+        rows = cur.fetchall()
+        con.close()
+    except Exception as e:
+        print(f"build_upcoming_birthdays_text: {e}")
+        return ""
+
+    if not rows:
+        return ""
+
+    today = datetime.now().date()
+    end = today + timedelta(days=days)
+    upcoming = []
+
+    for (name, position, bd_str) in rows:
+        bd = _parse_date_str(bd_str)
+        if not bd:
+            continue
+
+        try:
+            bd_this_year = bd.replace(year=today.year)
+        except ValueError:
+            bd_this_year = bd.replace(year=today.year, day=28)
+
+        if bd_this_year < today:
+            try:
+                bd_this_year = bd.replace(year=today.year + 1)
+            except ValueError:
+                bd_this_year = bd.replace(year=today.year + 1, day=28)
+
+        if today <= bd_this_year <= end:
+            upcoming.append((name, position or "", bd_this_year, bd_this_year == today))
+
+    if not upcoming:
+        return ""
+
+    upcoming.sort(key=lambda x: x[2])
+
+    # ── Собираем текст ──
+    lines = []
+    lines.append("─" * 40)
+    lines.append(f"  БЛИЖАЙШИЕ {days} ДНЕЙ")
+    lines.append("─" * 40)
+    lines.append("")
+
+    for name, position, bd, is_today in upcoming:
+        date_str = bd.strftime("%d.%m")
+        lines.append(f"{date_str}  {name}")
+        if position:
+            lines.append(f"      {position}")
+        if is_today:
+            lines.append(f"      ← СЕГОДНЯ")
+        lines.append("")  # пустая строка между записями
+
+    lines.append("─" * 40)
+    return "\n".join(lines)
+
 
 def open_file_chooser(on_select, ext=None, start_path=None):
     """Файловый менеджер: системный (Android) или FileChooserListView (десктоп)."""
@@ -2352,19 +2469,33 @@ def open_file_chooser(on_select, ext=None, start_path=None):
     # ─── Android: системный файловый менеджер ───
     if platform.system() == 'Android':
         from androidstorage4kivy import Chooser, SharedStorage
+        from kivy.app import App
 
         def chooser_callback(shared_file_list):
+            print(f"[Chooser] callback, files={shared_file_list}")
             if not shared_file_list:
                 return
-            ss = SharedStorage()
-            private_file_path = ss.copy_from_shared(shared_file_list[0])
-            if private_file_path:
-                on_select(private_file_path)
+            try:
+                ss = SharedStorage()
+                private_file_path = ss.copy_from_shared(shared_file_list[0])
+                print(f"[Chooser] copied to {private_file_path}")
+                if private_file_path:
+                    on_select(private_file_path)
+            except Exception as e:
+                print(f"[Chooser] callback error: {e}")
 
-        chooser = Chooser(chooser_callback)
-        # Показываем ВСЕ файлы — фильтр по MIME на Android часто блокирует
-        # .xlsx и .csv. Проверка расширения — в select_path.
-        chooser.choose_content("*/*")
+        try:
+            chooser = Chooser(chooser_callback)
+            # ⚠️ КРИТИЧНО: сохраняем ссылку на chooser в приложении,
+            # иначе Python GC удалит его до того, как Android покажет диалог
+            app = App.get_running_app()
+            if app:
+                app._active_chooser = chooser
+            print("[Chooser] вызов choose_content")
+            chooser.choose_content("*/*")
+        except Exception as e:
+            print(f"[Chooser] ошибка создания: {e}")
+            show_simple_dialog("Ошибка", f"Не удалось открыть файловый менеджер:\n{e}")
         return
 
     # ─── Windows / Linux: FileChooserListView в Popup ───
