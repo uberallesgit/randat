@@ -61,7 +61,8 @@
     left_action_2: lambda: None
     left_icon_3: ""
     left_action_3: lambda: None
-    left_icon_3_badge_text: ""
+#    left_icon_3_badge_text: ""
+    badge_text: ""                    # ← ДОЛЖНО БЫТЬ
     right_icon: ""
     right_action: lambda: None
     right_icon_2: ""
@@ -265,7 +266,7 @@
                     color: COLOR_ON_DARK
                     size_hint_x: None
                     width: "80dp"
-                    height: "48dp"        # ← добавить, чтобы не «плыло»
+                    height: "50dp"        # ← добавить, чтобы не «плыло»
                     on_release: root.make_output()
 
 
@@ -296,6 +297,7 @@
 
             MDTextField:
                 id: search_field
+                input_type: "text"  # 👈 Добавь эту строку
                 hint_text: "Поиск по фамилии…"
                 mode: "rectangle"
                 on_text: root.filter_workers(self.text)
