@@ -54,7 +54,7 @@ TEXT_COLOR = (0.25, 0.28, 0.33, 1)
 
 
 from kivy.graphics import Color, RoundedRectangle
-from kivy.clock import Clock
+
 
 
 
@@ -242,7 +242,6 @@ class GoorandaWindow(MDScreen):
         """Вызывается после построения всех kv-правил.
         Обновляем бейдж и показываем именинников через небольшую задержку,
         чтобы ids и виджеты были точно готовы."""
-        from kivy.clock import Clock
         Clock.schedule_once(self._refresh_birthdays_ui, 0.2)
 
     def _refresh_birthdays_ui(self, *args):
@@ -407,6 +406,7 @@ class WorkerWindow(MDScreen):
     # ── Загрузка из файла ──
     def _load_workers(self):
         path = self._workers_file()
+        print(f"[worker] path={path} exists={os.path.exists(path)}")
         if not os.path.exists(path):
             return []
         with open(path, "r", encoding="utf-8") as f:
@@ -2092,7 +2092,6 @@ class UberGoorandaApp(MDApp):
 
     def on_resume(self):
         """После возврата — снимаем выделение на случай, если оно осталось."""
-        from kivy.clock import Clock
         Clock.schedule_once(lambda dt: self._blur_all_inputs(), 0.1)
 
     def build(self):
@@ -2462,14 +2461,11 @@ def build_upcoming_birthdays_text(days=7):
 
 
 def open_file_chooser(on_select, ext=None, start_path=None):
-    """Файловый менеджер: системный (Android) или FileChooserListView (десктоп)."""
-    import platform
-    import os
+    import platform, os
 
-    # ─── Android: системный файловый менеджер ───
     if platform.system() == 'Android':
         from androidstorage4kivy import Chooser, SharedStorage
-        from kivy.app import App
+        from kivy.app import App        # ← добавить
 
         def chooser_callback(shared_file_list):
             print(f"[Chooser] callback, files={shared_file_list}")
@@ -2480,14 +2476,22 @@ def open_file_chooser(on_select, ext=None, start_path=None):
                 private_file_path = ss.copy_from_shared(shared_file_list[0])
                 print(f"[Chooser] copied to {private_file_path}")
                 if private_file_path:
-                    on_select(private_file_path)
+                    # ⚠️ ВАЖНО: переключаемся в главный поток Kivy —
+                    # только там можно создавать Popup/виджеты.
+                    Clock.schedule_once(
+                        lambda dt: on_select(private_file_path), 0
+                    )
             except Exception as e:
                 print(f"[Chooser] callback error: {e}")
+                # и ошибку показываем тоже из главного потока
+                Clock.schedule_once(
+                    lambda dt: show_simple_dialog(
+                        "Ошибка", f"Не удалось открыть файл:\n{e}"
+                    ), 0
+                )
 
         try:
             chooser = Chooser(chooser_callback)
-            # ⚠️ КРИТИЧНО: сохраняем ссылку на chooser в приложении,
-            # иначе Python GC удалит его до того, как Android покажет диалог
             app = App.get_running_app()
             if app:
                 app._active_chooser = chooser
@@ -2497,6 +2501,7 @@ def open_file_chooser(on_select, ext=None, start_path=None):
             print(f"[Chooser] ошибка создания: {e}")
             show_simple_dialog("Ошибка", f"Не удалось открыть файловый менеджер:\n{e}")
         return
+    ...
 
     # ─── Windows / Linux: FileChooserListView в Popup ───
     if not start_path:
