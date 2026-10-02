@@ -238,11 +238,43 @@ class GoorandaWindow(MDScreen):
         super().__init__(**kw)
         self.dialog = None
 
+
+
     def on_kv_post(self, base_widget):
         """Вызывается после построения всех kv-правил.
         Обновляем бейдж и показываем именинников через небольшую задержку,
         чтобы ids и виджеты были точно готовы."""
         Clock.schedule_once(self._refresh_birthdays_ui, 0.2)
+
+    _search_event = None
+
+    def on_bs_name_text(self, text):
+        """Живой поиск по мере ввода — только в режиме 'Адрес'."""
+        # Отменяем предыдущий запланированный вызов (debounce)
+        if self._search_event is not None:
+            self._search_event.cancel()
+            self._search_event = None
+
+        # Живой поиск только для режима «Адрес»
+        try:
+            mode = self.ids.spinner_id.text
+        except Exception:
+            mode = ""
+        if mode != "Адрес":
+            return
+
+        # Если поле пустое — очищаем вывод
+        if not text.strip():
+            try:
+                self.ids.output_text.text = ""
+            except Exception:
+                pass
+            return
+
+        # Запускаем поиск через 250 мс после последнего нажатия
+        self._search_event = Clock.schedule_once(
+            lambda dt: self.make_output(), 0.25
+        )
 
     def _refresh_birthdays_ui(self, *args):
         """Обновляет бейдж и output_text с именинниками."""
@@ -386,6 +418,47 @@ class GoorandaWindow(MDScreen):
                     total += "\n" + s
             self.ids.output_text.text = total or "Ничего не найдено."
             self.ids.bs_name.text = ""
+
+
+        elif mode == "Адрес":
+
+            # Разбиваем ввод на слова (по пробелам), регистронезависимо
+
+            terms = [t.lower() for t in raw.split() if t]
+
+            found = []
+
+            for bs, info in RDB.items():
+
+                address = str(info.get('address', '') or '')
+
+                if not address:
+                    continue
+
+                addr_lower = address.lower()
+
+                # Условие И: все введённые слова должны присутствовать в адресе
+
+                if all(term in addr_lower for term in terms):
+                    found.append((bs, address, info.get('coordinates', '')))
+
+            if found:
+
+                lines = [
+
+                    f"{bs} | {addr} | {coords}"
+
+                    for bs, addr, coords in sorted(found, key=lambda x: x[0])
+
+                ]
+
+                self.ids.output_text.text = "\n\n".join(lines)
+
+            else:
+
+                self.ids.output_text.text = "Ничего не найдено."
+
+            #self.ids.bs_name.text = ""
 
 
 

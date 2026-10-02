@@ -206,23 +206,19 @@
                 size_hint_y: 0.55
                 md_background_color: COLOR_SURFACE
 
-#                SelectableLabel:
-#                    id: output_text
-#                    text: ""
-#                    font_size: "15sp"
+
 
                 ScrollView:
                     do_scroll_x: False
                     do_scroll_y: True
+
                     MDTextField:
                         id: output_text
                         
                         input_type: "text"  # 👈 Добавь эту строку
-                        #hint_text: "Описание работ (свой вариант)"
-    #                    mode: "rectangle"
+
                         multiline: True
-    #                    size_hint_y: None
-    #                    max_height: "120dp"
+
 
             MDBoxLayout:
                 size_hint_y: None
@@ -260,6 +256,7 @@
                     mode: "rectangle"
                     text_validate_unfocus: False
                     on_text_validate: root.make_output()
+                    on_text: root.on_bs_name_text(self.text)
 
                 RoundedButton:
                     text: "GO"
