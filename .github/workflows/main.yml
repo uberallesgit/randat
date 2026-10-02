@@ -3,7 +3,6 @@ name: Build KivyMD APK
 on:
   push:
     branches: Mir_theme_succsess
-      
   workflow_dispatch:
 
 jobs:
@@ -31,7 +30,21 @@ jobs:
         run: |
           pip3 install --user buildozer cython==3.0.11
 
-      # !!! НОВЫЙ ШАГ: Полная очистка кэша !!!
+      # ── Декодируем постоянный keystore из секрета ──
+      - name: Decode debug keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > /tmp/debug-keystore.jks
+            chmod 600 /tmp/debug-keystore.jks
+            echo "DEBUG_KEYSTORE_FILE=/tmp/debug-keystore.jks" >> "$GITHUB_ENV"
+          else
+            echo "::error::DEBUG_KEYSTORE_BASE64 secret is not set."
+            exit 1
+          fi
+
+      # !!! Полная очистка кэша (оставлено как было) !!!
       - name: Clean build cache
         run: |
           rm -rf .buildozer
