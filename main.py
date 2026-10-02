@@ -273,7 +273,7 @@ class GoorandaWindow(MDScreen):
 
         # Запускаем поиск через 250 мс после последнего нажатия
         self._search_event = Clock.schedule_once(
-            lambda dt: self.make_output(), 0.25
+            lambda dt: self.make_output(), 1.25
         )
 
     def _refresh_birthdays_ui(self, *args):
