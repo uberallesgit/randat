@@ -1098,7 +1098,7 @@ class UberWindow(MDScreen):
             self.ids.respo_worker.text = ""
 
         if self.ids.respo_worker.text.strip():
-            self.ids.respo_view_label.text = f"Создатель заявки: {self.ids.respo_worker.text.strip()}"
+            self.ids.respo_view_label.text = f"Владелец заявки: {self.ids.respo_worker.text.strip()}"
             self.ids.respo_edit_box.height = 0
             self.ids.respo_edit_box.opacity = 0
             self.ids.respo_edit_box.disabled = True
@@ -1154,7 +1154,7 @@ class UberWindow(MDScreen):
         self.write_responsible_worker(name)
 
         # Обновляем Label
-        self.ids.respo_view_label.text = f"Мастер над заявкой: {name}"
+        self.ids.respo_view_label.text = f"Владелец заявки:  {name}"
 
         # Скрываем поле ввода
         self.ids.respo_edit_box.height = 0
@@ -2449,9 +2449,9 @@ def build_upcoming_birthdays_text(days=7):
 
     # ── Собираем текст ──
     lines = []
-    lines.append("─" * 40)
-    lines.append(f"  БЛИЖАЙШИЕ {days} ДНЕЙ")
-    lines.append("─" * 40)
+    lines.append("-" * 70)
+    lines.append(f"  БЛИЖАЙШИЕ ДНИ РОЖДЕНИЯ")
+    lines.append("-" * 70)
     lines.append("")
 
     for name, position, bd, is_today in upcoming:
@@ -2463,7 +2463,7 @@ def build_upcoming_birthdays_text(days=7):
             lines.append(f"      ← СЕГОДНЯ")
         lines.append("")  # пустая строка между записями
 
-    lines.append("─" * 40)
+    lines.append("-" * 70)
     return "\n".join(lines)
 
 
