@@ -466,6 +466,11 @@ class WorkerWindow(MDScreen):
     def filter_workers(self, text):
         self.refresh_workers(text)
 
+    def clear_search(self):
+        """Очищает поле поиска и возвращает полный список."""
+        self.ids.search_field.text = ""
+        self.refresh_workers()
+
     # ── Обработка чекбокса ──
     def _on_check(self, instance, value, worker):
         if value and worker not in self.selected:
@@ -487,8 +492,10 @@ class WorkerWindow(MDScreen):
     def _sync_to_uber(self):
         try:
             uber = self.manager.get_screen('Uber')
+            uber.workers_selected = bool(self.selected)
             uber.ids.choose_workers_label.text = (
-                ", ".join(self.selected) if self.selected else "Выбрать сотрудников"
+                ", ".join(self.selected) if self.selected
+                else "Выбери исполнителей:"
             )
         except Exception as e:
             print(f"WorkerWindow → Uber: {e}")
@@ -968,14 +975,9 @@ class WorkerWindow(MDScreen):
             # Убираем из выбранных, если был выбран
             if name in self.selected:
                 self.selected.remove(name)
-                try:
-                    uber = self.manager.get_screen('Uber')
-                    uber.ids.choose_workers_label.text = (
-                        ", ".join(self.selected) if self.selected
-                        else "Выбрать сотрудников"
-                    )
-                except Exception:
-                    pass
+
+            # Синхронизируем Uber: и текст, и флаг workers_selected
+            self._sync_to_uber()
 
             popup.dismiss()
             self.refresh_workers()
@@ -1061,6 +1063,7 @@ class CrwoWindow(MDScreen):
 class UberWindow(MDScreen):
     RDB = {}
     plural = BooleanProperty(False)
+    workers_selected = BooleanProperty(False)  # ← добавить
 
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -1095,7 +1098,7 @@ class UberWindow(MDScreen):
             self.ids.respo_worker.text = ""
 
         if self.ids.respo_worker.text.strip():
-            self.ids.respo_view_label.text = f"Мастер над заявкой: {self.ids.respo_worker.text.strip()}"
+            self.ids.respo_view_label.text = f"Создатель заявки: {self.ids.respo_worker.text.strip()}"
             self.ids.respo_edit_box.height = 0
             self.ids.respo_edit_box.opacity = 0
             self.ids.respo_edit_box.disabled = True
@@ -2062,6 +2065,10 @@ class WindowManager(MDScreenManager):
 # ГЛАВНОЕ ПРИЛОЖЕНИЕ
 # ────────────────────────────────────────────────────────────────
 class UberGoorandaApp(MDApp):
+    def on_start(self):
+        db.init_db()
+
+
 
     # ── Списки вариантов для меню ──
     TT_OPTIONS = ["TT", "Без ТТ"]

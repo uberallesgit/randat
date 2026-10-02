@@ -216,6 +216,7 @@
                     do_scroll_y: True
                     MDTextField:
                         id: output_text
+                        
                         input_type: "text"  # 👈 Добавь эту строку
                         #hint_text: "Описание работ (свой вариант)"
     #                    mode: "rectangle"
@@ -290,17 +291,32 @@
             right_action_2: lambda: root.export_workers_xlsx()
 
         # ── Поиск ──
+        # ── Поиск + кнопка Очистить ──
         MDBoxLayout:
             size_hint_y: None
             height: "76dp"
-            padding: [SPACE_MD, "20dp", SPACE_MD, SPACE_XS]
+            padding: [ SPACE_MD, "20dp", SPACE_MD, SPACE_XS ]
+            spacing: SPACE_SM
 
             MDTextField:
                 id: search_field
-                input_type: "text"  # 👈 Добавь эту строку
+                input_type: "text"
                 hint_text: "Поиск по фамилии…"
                 mode: "rectangle"
+                size_hint_y: None
+                height: "48dp"
+                pos_hint: { "center_y": .5 }
                 on_text: root.filter_workers(self.text)
+
+            RoundedButton:
+                text: "ОЧИСТИТЬ"
+                background_color: COLOR_DARK
+                color: COLOR_ON_DARK
+                size_hint_x: None
+                width: "120dp"
+                height: "48dp"
+                pos_hint: { "center_y": .5 }
+                on_release: root.clear_search()
 
         # ── Счётчик + Снять все ──
         MDBoxLayout:
@@ -441,6 +457,12 @@
 # ────────────────────────────────────────────────────────────────
 # UBER — главный экран
 # ────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
+# UBER — главный экран
+# ────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
+# UBER — главный экран
+# ────────────────────────────────────────────────────────────────
 <UberWindow>:
     name: "Uber"
 
@@ -454,6 +476,9 @@
             left_action: lambda: app.go_back("Gooranda")
 
         MDScrollView:
+            do_scroll_x: False
+            do_scroll_y: True
+
             MDBoxLayout:
                 orientation: "vertical"
                 padding: SPACE_MD
@@ -461,7 +486,7 @@
                 size_hint_y: None
                 height: self.minimum_height
 
-                # ── Номер CRWO ──
+                # ── Номер CRWO (симметрично: -1 | поле | +1) ──
                 MDBoxLayout:
                     size_hint_y: None
                     height: SIZE_ROW
@@ -471,55 +496,28 @@
                         text: "-1"
                         size_hint_x: None
                         width: "60dp"
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
                         on_release: root.crwo_decrement(root.ids.crwo_number.text)
 
                     MDTextField:
                         id: crwo_number
                         hint_text: "Номер CRWO"
-                        input_type: "text"  # 👈 Добавь эту строку
+                        input_type: "text"
                         mode: "rectangle"
                         size_hint_y: None
                         height: "48dp"
-                        pos_hint: { "center_y": .5 }
+                        pos_hint: {"center_y": .5}
 
                     RoundedButton:
                         text: "+1"
                         size_hint_x: None
                         width: "60dp"
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
                         on_release: root.crwo_increment(root.ids.crwo_number.text)
 
-                # ── Trouble Ticket ──
-#                MDBoxLayout:
-#                    size_hint_y: None
-#                    height: SIZE_ROW
-#                    spacing: SPACE_SM
-#
-#
-#                    FixedDropDownItem:
-#                        id: tt_spinner
-#                        text: "TT"
-#                        size_hint_x: None
-#                        width: "100dp"
-#                        on_release: app.open_tt_menu(tt_spinner)
-#
-#                    MDTextField:
-#                        id: tt_number
-#                        hint_text: "Номер ТТ"
-#                        input_type: "text"  # 👈 Добавь эту строку
-#                        mode: "rectangle"
-#                        size_hint_y: None
-#                        height: "48dp"
-#                        pos_hint: { "center_y": .5 }
-#
-#                    RoundedButton:
-#                        text: "Очистить"
-#                        background_color: COLOR_DANGER      # ← красный
-#                        color: COLOR_ON_DARK                # ← белый текст
-#                        size_hint_x: None
-#                        width: "100dp"
-#                        on_release: root.clear_tt_number()
-
-                # ── БС ──
+                # ── БС (спиннер | поле | Очистить) ──
                 MDBoxLayout:
                     size_hint_y: None
                     height: SIZE_ROW
@@ -530,27 +528,51 @@
                         text: "БС"
                         size_hint_x: None
                         width: "100dp"
+                        pos_hint: {"center_y": .5}
                         on_release: app.open_moto_menu(moto_spinner)
 
                     MDTextField:
                         id: bs_name
                         hint_text: "Номер БС"
-                        input_type: "text"  # 👈 Добавь эту строку
+                        input_type: "text"
                         mode: "rectangle"
                         size_hint_y: None
                         height: "48dp"
-                        pos_hint: { "center_y": .5 }
+                        pos_hint: {"center_y": .5}
 
                     RoundedButton:
                         text: "Очистить"
-                        background_color: COLOR_DANGER      # ← красный
-                        color: COLOR_ON_DARK                # ← белый текст
+                        background_color: COLOR_DANGER
+                        color: COLOR_ON_DARK
                         size_hint_x: None
                         width: "100dp"
-                        height: "48dp"        # ← добавить, чтобы не «плыло»
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
                         on_release: root.clear_bs_name()
 
-                # ── Регион / Организация ──
+                # ── Чекбокс «Единой заявкой» — ПОД полем Номер БС ──
+                MDBoxLayout:
+                    id: single_request_box
+                    size_hint_y: None
+                    height: "30dp"
+                    spacing: SPACE_SM
+                    pos_hint: {"center_x": .5}
+
+                    MDCheckbox:
+                        id: single_request_checkbox
+                        size_hint: None, None
+                        size: "30dp", "30dp"
+                        pos_hint: {"center_y": .5}
+                        active: False if self.disabled else self.active
+
+                    MDLabel:
+                        text: "Единой заявкой"
+                        font_style: "Body1"
+                        theme_text_color: "Hint" if self.disabled else "Primary"
+                        valign: "middle"
+                        pos_hint: {"center_y": .5}
+
+                # ── Регион / Организация (50/50) ──
                 MDBoxLayout:
                     orientation: "horizontal"
                     size_hint_y: None
@@ -560,16 +582,18 @@
                     FixedDropDownItem:
                         id: region_short
                         text: "FEO"
-                        pos_hint: {"center_x": .5}
+                        size_hint_x: 0.5
+                        pos_hint: {"center_y": .5}
                         on_release: app.open_region_menu(region_short)
 
                     FixedDropDownItem:
                         id: organization
                         text: "Миранда-Медиа"
-                        pos_hint: {"center_x": .5}
+                        size_hint_x: 0.5
+                        pos_hint: {"center_y": .5}
                         on_release: app.open_organization_menu(organization)
 
-                                # ── Строка 1: тип работ + тип запитки ──
+                # ── Тип работ + тип запитки (50/50) ──
                 MDBoxLayout:
                     orientation: "horizontal"
                     size_hint_y: None
@@ -579,14 +603,18 @@
                     FixedDropDownItem:
                         id: work_type
                         text: "🔋 ДГУ"
+                        size_hint_x: 0.5
+                        pos_hint: {"center_y": .5}
                         on_release: app.open_work_type_menu(work_type)
 
                     FixedDropDownItem:
                         id: work_description_spinner
                         text: "🪫 Запитать БС от ДГУ"
+                        size_hint_x: 0.5
+                        pos_hint: {"center_y": .5}
                         on_release: app.open_work_desc_menu(work_description_spinner)
 
-                # ── Строка 2: своё описание работ (схлопнута по умолчанию) ──
+                # ── Своё описание работ (схлопнута по умолчанию) ──
                 MDBoxLayout:
                     id: custom_desc_box
                     orientation: "horizontal"
@@ -598,7 +626,7 @@
 
                     MDTextField:
                         id: work_description
-                        input_type: "text"  # 👈 Добавь эту строку
+                        input_type: "text"
                         hint_text: "Описание работ (свой вариант)"
                         mode: "rectangle"
                         multiline: True
@@ -608,15 +636,15 @@
                     RoundedButton:
                         text: "Очистить"
                         size_hint_x: None
-                        background_color: COLOR_DANGER      # ← красный
-                        color: COLOR_ON_DARK                # ← белый текст
+                        background_color: COLOR_DANGER
+                        color: COLOR_ON_DARK
                         width: "100dp"
                         size_hint_y: None
                         height: "48dp"
-                        #pos_hint: {"center_y": .5}
+                        pos_hint: {"center_y": .5}
                         on_release: root.clear_description()
 
-                # ── Строка 3: время ──
+                # ── Время ──
                 MDBoxLayout:
                     orientation: "horizontal"
                     size_hint_y: None
@@ -626,9 +654,11 @@
                     FixedDropDownItem:
                         id: time_to_go_spinner
                         text: "Назначить время"
+                        size_hint_x: 1
+                        pos_hint: {"center_y": .5}
                         on_release: app.open_time_menu(time_to_go_spinner)
 
-                # ── Исполнители ──
+                # ── Label «Выбери исполнителей» — КРАСНЫЙ ──
                 MDBoxLayout:
                     size_hint_y: None
                     height: SIZE_BUTTON
@@ -636,40 +666,34 @@
 
                     MDLabel:
                         id: choose_workers_label
-                        text: "Выбери исполнителей: "
+                        text: "Выбери исполнителей:"
                         font_style: "Body1"
-                        pos_hint: {"center_y": .5}
-                        pos_hint: {"center_x": .5}
+                        theme_text_color: "Custom"
+                        text_color: COLOR_DARK if root.workers_selected else COLOR_DANGER
+                        bold: not root.workers_selected
+                        halign: "center"
                         valign: "middle"
+                        text_size: self.size
+                        pos_hint: { "center_y": .5 }
 
+                # ── Кнопка «Выбрать сотрудников» — ПО ЦЕНТРУ ──
                 MDBoxLayout:
                     orientation: "horizontal"
                     size_hint_y: None
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
+                    Widget:
+
                     RoundedButton:
                         text: "Выбрать сотрудников"
+                        size_hint_x: None
+                        width: "260dp"
+                        height: "48dp"
                         pos_hint: {"center_y": .5}
                         on_release: app.go_to("WorkerWindow")
 
-                    MDBoxLayout:
-                        id: single_request_box
-                        size_hint_y: None
-                        height: "30dp"
-                        spacing: SPACE_SM
-
-                        MDCheckbox:
-                            id: single_request_checkbox
-                            size_hint: None, None
-                            size: "30dp", "30dp"
-                            active: False if self.disabled else self.active
-
-                        MDLabel:
-                            text: "Единой заявкой"
-                            font_style: "Body1"
-                            theme_text_color: "Hint" if self.disabled else "Primary"
-                            valign: "middle"
+                    Widget:
 
                 # ── Ответственный: режим ввода ──
                 MDBoxLayout:
@@ -682,21 +706,22 @@
                     MDTextField:
                         id: respo_worker
                         hint_text: "Выдал заявку (Фамилия)"
-                        input_type: "text"  # 👈 Добавь эту строку
+                        input_type: "text"
                         mode: "rectangle"
                         size_hint_y: None
-                        height: SIZE_ROW
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
                         on_text_validate: root.assign_responsible()
 
                     RoundedButton:
                         text: "Присвоить"
-                        size_hint_y: None
-                        height: "56dp"
+                        size_hint_x: None
+                        height: "48dp"
                         width: "120dp"
-                        pos_hint: { "center_y": .5 }
+                        pos_hint: {"center_y": .5}
                         on_press: root.assign_responsible()
 
-                # ── Ответственный: режим просмотра (скрыт по умолчанию) ──
+                # ── Ответственный: режим просмотра ──
                 MDBoxLayout:
                     id: respo_view_box
                     orientation: "horizontal"
@@ -710,28 +735,29 @@
                         id: respo_view_label
                         text: ""
                         theme_text_color: "Custom"
-                        text_color: (0.106, 0.106, 0.118, 1)
+                        text_color: COLOR_DARK
                         font_style: "Body1"
                         valign: "middle"
                         padding: SPACE_MD, 0
 
+                    # ── Кнопка «Изменить» — высота уменьшена вдвое (24dp) ──
                     RoundedButton:
                         text: "Изменить"
                         size_hint_x: None
                         width: "120dp"
+                        height: "24dp"
+                        pos_hint: {"center_y": .5}
                         on_release: root.edit_responsible()
 
-        # ── Кнопка формирования ──
+        # ── Кнопка формирования (по центру) ──
         FloatLayout:
-            anchor_x: 'center'
-            anchor_y: 'center'
             size_hint: 1, None
             height: "96dp"
 
             RoundedButton:
                 text: "СФОРМИРОВАТЬ ЗАЯВКУ"
-                background_color: COLOR_PRIMARY   # салатовый (0.60, 0.87, 0.40, 1)
-                color: COLOR_ON_DARK           # тёмный текст (0.106, 0.106, 0.118, 1)(лучше читается на светлом)
+                background_color: COLOR_PRIMARY
+                color: COLOR_ON_DARK
                 size_hint: None, None
                 size: "250dp", "64dp"
                 pos_hint: {"center_x": 0.5, "center_y": 0.5}

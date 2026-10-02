@@ -8,11 +8,29 @@ SQLite-хранилище пользователей для экрана лог�
 """
 
 import hashlib
+import os
+import platform
 import secrets
 import sqlite3
+import sys
 from pathlib import Path
 
-DB_PATH = Path(__file__).with_name("users.db")
+
+def _get_db_path() -> Path:
+    if platform.system() == "Android":
+        base = Path(__file__).resolve().parent
+    elif getattr(sys, "frozen", False):
+        # PyInstaller: база должна лежать рядом с .exe, а не в _MEIPASS
+        base = Path(sys.executable).parent
+    else:
+        base = Path(__file__).resolve().parent
+
+    service_dir = base / "service"
+    service_dir.mkdir(parents=True, exist_ok=True)
+    return service_dir / "users.db"
+
+
+DB_PATH = _get_db_path()
 
 _PBKDF2_ITERATIONS = 200_000
 _HASH_ALGO = "sha256"
