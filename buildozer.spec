@@ -1,6 +1,12 @@
 [app]
 title = RANDAT MD
 package.name = randatmd
+
+android.keystore = /tmp/debug-keystore.jks
+android.keystore_passwd = android
+android.keyalias = androiddebugkey
+android.keyalias_passwd = android
+
 package.domain = org.uberalless
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,pickle,txt
