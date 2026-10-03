@@ -445,65 +445,40 @@ class GoorandaWindow(MDScreen):
                 self.ids.output_text.text = "Ничего не найдено."
 
 
+
         elif mode == "ТП":
-
-            # Поиск базовых станций по номеру ТП (подстанции).
-
-            # Пользователь вводит, например, "225" или "ТП-225".
-
-            # Ищем совпадение в RDB[bs]['access'].
-
             query = raw.strip().lower()
-
-            # Если пользователь ввёл только цифры — добавим префикс "тп-"
-
-            # для точного совпадения с форматом хранения ("ТП-225").
-
+            # Если пользователь ввёл только цифры — ищем оба варианта:
+            # "тп-225" и "тп 225".
             if query.isdigit():
-                query = "тп-" + query
-
+                variants = ["тп-" + query, "тп " + query]
+            else:
+                # Пользователь ввёл что-то с префиксом.
+                # Приводим дефис к пробелу и наоборот — ищем оба варианта.
+                normalized = query.replace("-", " ")
+                variants = [query]
+                if normalized != query:
+                    variants.append(normalized)
+                # Если ввёл "тп 218" — добавим вариант с дефисом
+                if " " in query:
+                    variants.append(query.replace(" ", "-"))
             found = []
-
             for bs, info in RDB.items():
-
                 access = str(info.get('access', '') or '')
-
                 if not access:
                     continue
-
                 access_lower = access.lower()
-
-                # Ищем вхождение номера ТП в поле access
-
-                if query in access_lower:
-                    found.append((
-
-                        bs,
-
-                        str(info.get('address', '') or ''),
-
-                        str(info.get('coordinates', '') or ''),
-
-                        access,
-
-                    ))
-
+                # Проверяем любой из вариантов вхождения
+                if any(v in access_lower for v in variants):
+                    found.append((bs,str(info.get('address', '') or ''),str(info.get('coordinates', '') or ''),access,))
             if found:
-
                 lines = [
-
                     f"{bs} | {addr} | {coords}"
-
                     for bs, addr, coords, _ in sorted(found, key=lambda x: x[0])
-
                 ]
-
                 self.ids.output_text.text = "\n\n".join(lines)
-
             else:
-
                 self.ids.output_text.text = "Ничего не найдено."
-
             self.ids.bs_name.text = ""
 
 
