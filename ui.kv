@@ -9,7 +9,7 @@
 #:set COLOR_BG       (0.953, 0.949, 0.973, 1)   # светлый лавандово-серый фон (как на сайте)
 #:set COLOR_SURFACE  (1, 1, 1, 1)               # белые карточки
 #:set COLOR_HEADER   (0.420, 0.161, 0.851, 1)   # фирменный фиолетовый «Миранда» — шапка
-#:set COLOR_DARK     (0.106, 0.106, 0.118, 1)   # тёмный текст (как в навигации сайта)
+#:set COLOR_DARK     (0.3, 0.3, 0.3, 1)   # тёмный текст (как в навигации сайта)
 #:set COLOR_ON_DARK  (1, 1, 1, 1)               # белый текст на фиолетовом/оранжевом/красном
 #:set COLOR_PRIMARY  (0.949, 0.349, 0.129, 1)   # фирменный оранжевый «Миранда» — акцент/кнопки
 #:set COLOR_DANGER   (0.851, 0.204, 0.204, 1)   # красный для опасных действий
@@ -26,6 +26,16 @@
 #:set RADIUS_CARD  [16, 16, 16, 16]
 
 # ── Единый стиль кнопки (скруглённый прямоугольник + текст) ──
+
+<MDTextField>:
+    foreground_color: COLOR_DARK
+    hint_text_color: (0.5, 0.5, 0.5, 1)
+    cursor_color: COLOR_HEADER
+    text_color_normal: COLOR_DARK
+    text_color_focus: COLOR_DARK
+    #hint_text_color_normal: (0.5, 0.5, 0.5, 1)
+    #hint_text_color_focus: (0.5, 0.5, 0.5, 1)
+
 <RoundedButton@Button>:
     background_normal: ""
     background_down: ""
@@ -159,19 +169,6 @@
         on_release: root.right_action()
 
 
-# ── Единая карточка для вывода текста (мягкое скругление + тень
-#    вместо плоского белого прямоугольника — аккуратнее и современнее) ──
-# ── Единый стиль кнопок: neutral / primary / danger ──
-# Кнопка рисует фон сама (canvas), а не через MDFlatButton.md_bg_color —
-# в некоторых версиях KivyMD MDFlatButton рендерит текст через внутренний
-# дочерний виджет и просто игнорирует md_bg_color/text_color, заданные
-# напрямую (именно из-за этого кнопки были «бесцветными»). Самостоятельная
-# отрисовка гарантированно работает в любой версии библиотеки.
-# ── Единый стиль кнопок: neutral / primary / danger ──
-# ── Единый стиль кнопок: neutral / primary / danger ──
-
-
-
 # ────────────────────────────────────────────────────────────────
 # GOORANDA
 # ────────────────────────────────────────────────────────────────
@@ -214,11 +211,13 @@
 
                     MDTextField:
                         id: output_text
-                        
                         input_type: "text"  # 👈 Добавь эту строку
-
                         multiline: True
-
+                        theme_text_color: "Custom"
+#                        text_color_normal: COLOR_DARK
+#                        text_color_focus: COLOR_DARK
+#                        hint_text_color_normal: (0.5, 0.5, 0.5, 1)
+#                        hint_text_color_focus: (0.5, 0.5, 0.5, 1)
 
             MDBoxLayout:
                 size_hint_y: None

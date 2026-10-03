@@ -49,7 +49,7 @@ os.environ['KIVY_GRAPHICS'] = 'gles'
 os.environ['KIVY_GLES_LIMITS'] = '0'
 os.environ['KIVY_NO_ARGS'] = '1'
 
-TEXT_COLOR = (0.25, 0.28, 0.33, 1)
+TEXT_COLOR = (0.2,0.2,0.2,1)#(0.25, 0.28, 0.33, 1)
 
 
 
@@ -152,24 +152,6 @@ MIN_PASSWORD_LENGTH = 6
 class LoginWindow(MDScreen):
     """Поля: Имя, Фамилия, Пароль. Кнопки: Войти / Зарегистрироваться."""
 
-    # def on_enter(self, *args):
-    #     print("=== GoorandaWindow.on_enter ===")  # ← добавить
-    #     """Обновляем бейдж и показываем именинников ближайших 7 дней."""
-    #     try:
-    #         count = count_upcoming_birthdays(7)
-    #         print(f"[Gooranda] count={count}")  # ← добавить
-    #         self.ids.gooranda_header.badge_text = str(count) if count > 0 else ""
-    #         print(f"[Gooranda] badge_text={self.ids.gooranda_header.badge_text!r}")  # ← добавить
-    #     except Exception as e:
-    #         print(f"on_enter badge: {e}")
-    #
-    #     try:
-    #         if not self.ids.output_text.text.strip():
-    #             text = build_upcoming_birthdays_text(7)
-    #             print(f"[Gooranda] birthdays text len={len(text)}")  # ← добавить
-    #             self.ids.output_text.text = text
-    #     except Exception as e:
-    #         print(f"on_enter birthdays text: {e}")
 
     def set_error(self, text: str) -> None:
         self.ids.error_label.text = text
@@ -271,9 +253,13 @@ class GoorandaWindow(MDScreen):
                 pass
             return
 
+        # 👇 НОВОЕ: запускаем поиск только с 3-го символа
+        if len(text.strip()) < 3:
+            return
+
         # Запускаем поиск через 250 мс после последнего нажатия
         self._search_event = Clock.schedule_once(
-            lambda dt: self.make_output(), 1.25
+            lambda dt: self.make_output(), 0.25
         )
 
     def _refresh_birthdays_ui(self, *args):
@@ -458,7 +444,67 @@ class GoorandaWindow(MDScreen):
 
                 self.ids.output_text.text = "Ничего не найдено."
 
-            #self.ids.bs_name.text = ""
+
+        elif mode == "ТП":
+
+            # Поиск базовых станций по номеру ТП (подстанции).
+
+            # Пользователь вводит, например, "225" или "ТП-225".
+
+            # Ищем совпадение в RDB[bs]['access'].
+
+            query = raw.strip().lower()
+
+            # Если пользователь ввёл только цифры — добавим префикс "тп-"
+
+            # для точного совпадения с форматом хранения ("ТП-225").
+
+            if query.isdigit():
+                query = "тп-" + query
+
+            found = []
+
+            for bs, info in RDB.items():
+
+                access = str(info.get('access', '') or '')
+
+                if not access:
+                    continue
+
+                access_lower = access.lower()
+
+                # Ищем вхождение номера ТП в поле access
+
+                if query in access_lower:
+                    found.append((
+
+                        bs,
+
+                        str(info.get('address', '') or ''),
+
+                        str(info.get('coordinates', '') or ''),
+
+                        access,
+
+                    ))
+
+            if found:
+
+                lines = [
+
+                    f"{bs} | {addr} | {coords}"
+
+                    for bs, addr, coords, _ in sorted(found, key=lambda x: x[0])
+
+                ]
+
+                self.ids.output_text.text = "\n\n".join(lines)
+
+            else:
+
+                self.ids.output_text.text = "Ничего не найдено."
+
+            self.ids.bs_name.text = ""
 
 
 
@@ -522,7 +568,7 @@ class WorkerWindow(MDScreen):
             lbl = MDLabel(
                 text=w,
                 theme_text_color="Custom",
-                text_color=(0.106, 0.106, 0.118, 1),
+                text_color= TEXT_COLOR,   #(0.106, 0.106, 0.118, 1),
                 valign="middle",
                 font_size="13sp",
                 shorten=True,
@@ -2599,7 +2645,7 @@ def open_file_chooser(on_select, ext=None, start_path=None):
 
     chooser = FileChooserListView(path=start_path)
 
-    TEXT_COLOR = (0.25, 0.28, 0.33, 1)
+
 
     # ── Тёмно-серый цвет для всех Label внутри chooser ──
     def _apply_dark_colors(*_):
