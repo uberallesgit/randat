@@ -1,6 +1,7 @@
 import os
 import sys
-import db
+import db   #<--------------
+import rdb
 import csv
 import pickle
 import webbrowser
@@ -209,12 +210,7 @@ class LoginWindow(MDScreen):
 # ────────────────────────────────────────────────────────────────
 class GoorandaWindow(MDScreen):
     route = None
-
-    try:
-        with open(resource_path('RDB.pickle'), "rb") as f:
-            RDB = pickle.load(f)
-    except FileNotFoundError:
-        RDB = {}
+    RDB = {}  # заполнится в on_pre_enter / on_kv_post
 
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -286,6 +282,10 @@ class GoorandaWindow(MDScreen):
             print(f"_refresh output_text: {e}")
 
     def on_pre_enter(self, *args):
+        UberWindow.RDB = rdb.load_rdb()
+        # Обновляем RDB из БД
+        self.RDB = rdb.load_rdb()
+
         """Обновляем бейдж на иконке людей."""
         count = count_upcoming_birthdays(7)
         try:
@@ -1163,11 +1163,7 @@ class UberWindow(MDScreen):
         super().__init__(**kw)
         self.dialog = None
         # Загружаем базу
-        try:
-            with open(resource_path('RDB.pickle'), "rb") as f:
-                UberWindow.RDB = pickle.load(f)
-        except FileNotFoundError:
-            UberWindow.RDB = {}
+        UberWindow.RDB = rdb.load_rdb()
 
         # 2. Метод для проверки одиночная БС или их несколько (вызывается при вводе текста)
     def check_plural_bs(self, text):
@@ -1535,12 +1531,17 @@ class SettingsWindow(MDScreen):
                         }
         wb.close()
 
-        with open(resource_path('RDB.pickle'), "wb") as f:
-            pickle.dump(bs_dict, f)
+        rdb.save_rdb(bs_dict, replace=True)
+
+        # Перезагружаем словари у экранов — перезапуск приложения не нужен
+        try:
+            self.manager.get_screen('Gooranda').RDB = rdb.load_rdb()
+            self.manager.get_screen('Uber').RDB = rdb.load_rdb()
+        except Exception as e:
+            print(f"rdb_update reload: {e}")
 
         self.show_dialog(
-            "Обновление завершено. Чтобы изменения вступили в силу, "
-            "перезагрузите приложение.",
+            f"Обновление завершено. Записей: {len(bs_dict)}",
             title="Готово",
         )
 
@@ -2161,6 +2162,10 @@ class WindowManager(MDScreenManager):
 class UberGoorandaApp(MDApp):
     def on_start(self):
         db.init_db()
+        import rdb
+        print(f"[RDB] db_path = {rdb.db_path()}")
+        print(f"[RDB] exists   = {os.path.exists(rdb.db_path())}")
+        print(f"[RDB] size     = {os.path.getsize(rdb.db_path()) if os.path.exists(rdb.db_path()) else 0}")
 
 
 
