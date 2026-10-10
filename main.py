@@ -1,9 +1,11 @@
 import os
 import sys
+from api_client import api
 import db   #<--------------
 import rdb
 import csv
-import pickle
+from paths import resource_path, service_path
+from api_client import api
 import webbrowser
 from datetime import datetime, timedelta
 import openpyxl
@@ -23,7 +25,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
 from kivymd.uix.list import MDList, OneLineListItem
 from kivy.uix.filechooser import FileChooserIconView, FileChooserListView
-from kivy.properties import StringProperty, ListProperty, BooleanProperty
+from kivy.properties import ListProperty, BooleanProperty
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.graphics import Color, RoundedRectangle
@@ -44,6 +46,9 @@ import os
 from kivymd.uix.label import MDLabel
 import sqlite3
 import re
+from paths import resource_path, service_path
+from api_client import api
+from kivy.properties import StringProperty, ObjectProperty
 
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
@@ -120,26 +125,6 @@ class CheckboxItem(OneLineAvatarIconListItem):
         cb.bind(active=lambda inst, val: self._callback(inst, val, worker_name))
         self.add_widget(cb)
 
-# ────────────────────────────────────────────────────────────────
-# Пути к ресурсам (учитываем PyInstaller)
-# ────────────────────────────────────────────────────────────────
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
-
-
-def service_path(filename):
-    """Файлы service/ пишутся рядом с .exe / main.py — НЕ в _MEIPASS."""
-    if getattr(sys, 'frozen', False):
-        base = os.path.dirname(sys.executable)
-    else:
-        base = os.path.dirname(os.path.abspath(__file__))
-    service_dir = os.path.join(base, 'service')
-    os.makedirs(service_dir, exist_ok=True)
-    return os.path.join(service_dir, filename)
-
-
 #__________________________________________________________________
 #  Login window
 #___________________________________________________________________
@@ -175,12 +160,30 @@ class LoginWindow(MDScreen):
             self.set_error("Заполните имя, фамилию и пароль")
             return
 
-        if db.verify_user(first_name, last_name, password):
-            self.set_error("")
-            self.ids.password.text = ""
-            MDApp.get_running_app().go_to(HOME_SCREEN_NAME)
-        else:
-            self.set_error("Неверное имя, фамилия или пароль")
+        # Индикация "идёт запрос"
+        self.set_error("Проверка…")
+
+        data = api.login(first_name, last_name, password)
+
+        if data is None:
+            # Сервер недоступен — пробуем локальный fallback
+            try:
+                if db.verify_user(first_name, last_name, password):
+                    self.set_error("")
+                    self.ids.password.text = ""
+                    MDApp.get_running_app().go_to(HOME_SCREEN_NAME)
+                    return
+            except Exception as e:
+                print(f"[login] fallback error: {e}")
+
+            self.set_error("Неверное имя, фамилия или пароль (или нет сети)")
+            return
+
+        # Успех — токен уже сохранён внутри api.login
+        print(f"[login] OK: {data['first_name']} (role={data['role']})")
+        self.set_error("")
+        self.ids.password.text = ""
+        MDApp.get_running_app().go_to(HOME_SCREEN_NAME)
 
     def register(self) -> None:
         first_name, last_name, password = self._read_fields()
@@ -193,13 +196,25 @@ class LoginWindow(MDScreen):
             self.set_error(f"Пароль должен быть не короче {MIN_PASSWORD_LENGTH} символов")
             return
 
-        try:
-            db.register_user(first_name, last_name, password)
-        except db.UserAlreadyExists:
-            self.set_error("Такой пользователь уже зарегистрирован")
-            return
+        self.set_error("Регистрация…")
 
-        self.set_error("")
+        ok, detail = api.register(first_name, last_name, password)
+
+        if not ok:
+            # Сервер недоступен? Пробуем локально
+            try:
+                db.register_user(first_name, last_name, password)
+                self.set_error("")
+                self.login()
+                return
+            except db.UserAlreadyExists:
+                self.set_error("Такой пользователь уже зарегистрирован")
+                return
+            except Exception:
+                self.set_error(detail or "Ошибка регистрации")
+                return
+
+        # Успех — сразу логинимся
         self.login()
 
 
@@ -1157,7 +1172,10 @@ class CrwoWindow(MDScreen):
 class UberWindow(MDScreen):
     RDB = {}
     plural = BooleanProperty(False)
-    workers_selected = BooleanProperty(False)  # ← добавить
+    workers_selected = BooleanProperty(False)
+    arrival_date = StringProperty("")  # "2026-10-10" (для логики)
+    arrival_date_display = StringProperty("")  # "10.10.2026" (для UI)
+    arrival_time = StringProperty("")  # "14:30"
 
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -1195,6 +1213,196 @@ class UberWindow(MDScreen):
             self.ids.respo_view_box.height = dp(56)
             self.ids.respo_view_box.opacity = 1
             self.ids.respo_view_box.disabled = False
+
+    # ── Дата и время прибытия ──
+    def open_date_picker(self):
+        """Открыть календарь MDDatePicker."""
+        from kivymd.uix.pickers import MDDatePicker
+        from datetime import datetime
+
+        try:
+            if self.arrival_date:
+                init = datetime.strptime(self.arrival_date, "%Y-%m-%d").date()
+            else:
+                init = datetime.now().date()
+        except Exception:
+            init = datetime.now().date()
+
+        picker = MDDatePicker(
+            year=init.year,
+            month=init.month,
+            day=init.day,
+            min_date=datetime.now().date(),
+        )
+        picker.bind(on_save=self._on_date_saved)
+        picker.open()
+
+    def _on_date_saved(self, instance, value, date_range):
+        """value — datetime.date."""
+        self.arrival_date = value.strftime("%Y-%m-%d")
+        self.arrival_date_display = value.strftime("%d.%m.%Y")
+        print(f"[uber] дата прибытия: {self.arrival_date_display}")
+
+    def open_time_picker(self):
+        """Диалог выбора времени: часы 0–23, минуты 00/15/30/45."""
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.scrollview import ScrollView
+        from kivymd.uix.label import MDLabel
+        from kivy.metrics import dp
+        from datetime import datetime
+
+        # Начальные значения
+        if self.arrival_time:
+            try:
+                h0, m0 = map(int, self.arrival_time.split(":"))
+            except Exception:
+                h0, m0 = datetime.now().hour, 0
+        else:
+            now = datetime.now()
+            h0 = (now.hour + 1) % 24
+            m0 = 0
+
+        HOURS = [f"{h:02d}" for h in range(24)]
+        MINUTES = ["00", "15", "30", "45"]
+
+        content = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(8))
+
+        header = MDLabel(
+            text=f"Выбрано: {h0:02d}:{m0:02d}",
+            halign="center",
+            size_hint_y=None,
+            height=dp(30),
+            theme_text_color="Custom",
+            text_color=(0.2, 0.2, 0.2, 1),
+        )
+        content.add_widget(header)
+
+        body = BoxLayout(orientation="horizontal", spacing=dp(8))
+
+        # ── Часы ──
+        hours_scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        hours_layout = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            spacing=dp(2),
+        )
+        hours_layout.bind(minimum_height=hours_layout.setter("height"))
+
+        selected = {"h": h0, "m": m0}
+        hour_buttons = []
+        minute_buttons = []
+
+        def refresh_colors():
+            for b in hour_buttons:
+                is_sel = int(b.text) == selected["h"]
+                b.background_color = (0.42, 0.16, 0.85, 1) if is_sel else (0.95, 0.95, 0.97, 1)
+                b.color = (1, 1, 1, 1) if is_sel else (0.2, 0.2, 0.2, 1)
+            for b in minute_buttons:
+                is_sel = int(b.text) == selected["m"]
+                b.background_color = (0.42, 0.16, 0.85, 1) if is_sel else (0.95, 0.95, 0.97, 1)
+                b.color = (1, 1, 1, 1) if is_sel else (0.2, 0.2, 0.2, 1)
+            header.text = f"Выбрано: {selected['h']:02d}:{selected['m']:02d}"
+
+        def make_handler(field, value):
+            def _handler(*_):
+                selected[field] = value
+                refresh_colors()
+
+            return _handler
+
+        for h_str in HOURS:
+            b = Button(
+                text=h_str,
+                size_hint_y=None,
+                height=dp(36),
+                background_normal="",
+                font_size=dp(14),
+            )
+            b.bind(on_release=make_handler("h", int(h_str)))
+            hour_buttons.append(b)
+            hours_layout.add_widget(b)
+        hours_scroll.add_widget(hours_layout)
+
+        # ── Минуты ──
+        minutes_scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        minutes_layout = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            spacing=dp(2),
+        )
+        minutes_layout.bind(minimum_height=minutes_layout.setter("height"))
+
+        for m_str in MINUTES:
+            b = Button(
+                text=m_str,
+                size_hint_y=None,
+                height=dp(36),
+                background_normal="",
+                font_size=dp(14),
+            )
+            b.bind(on_release=make_handler("m", int(m_str)))
+            minute_buttons.append(b)
+            minutes_layout.add_widget(b)
+        minutes_scroll.add_widget(minutes_layout)
+
+        body.add_widget(hours_scroll)
+        body.add_widget(minutes_scroll)
+        content.add_widget(body)
+
+        refresh_colors()  # первоначальная подсветка
+
+        # ── Кнопки OK / Отмена ──
+        buttons = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+        )
+
+        popup = Popup(
+            title="Выбор времени",
+            title_color=(0, 0, 0, 1),
+            title_size=dp(16),
+            content=content,
+            size_hint=(0.9, 0.6),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=True,
+        )
+
+        def _ok(*_):
+            self.arrival_time = f"{selected['h']:02d}:{selected['m']:02d}"
+            print(f"[uber] время прибытия: {self.arrival_time}")
+            popup.dismiss()
+
+        def _cancel(*_):
+            popup.dismiss()
+
+        btn_ok = Button(
+            text="OK",
+            background_normal="",
+            background_color=(0.2, 0.6, 1, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_ok.bind(on_release=_ok)
+
+        btn_cancel = Button(
+            text="Отмена",
+            background_normal="",
+            background_color=(0.9, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_cancel.bind(on_release=_cancel)
+
+        buttons.add_widget(btn_ok)
+        buttons.add_widget(btn_cancel)
+        content.add_widget(buttons)
+
+        popup.open()
 
     # ── Диалог ──
     def show_dialog(self, text, title="Внимание"):
@@ -1322,17 +1530,29 @@ class UberWindow(MDScreen):
             responsibles = self.ids.choose_workers_label.text
             organization = f"🍊{self.ids.organization.text}"
 
-        t = self.ids.time_to_go_spinner.text
-        hours = 2 if t == "Назначить время" else int(t.split()[0])
-
         spinner_val = self.ids.work_description_spinner.text
         if spinner_val == "Ввести свой вариант":
             work_desc = self.ids.work_description.text.strip()
         else:
             work_desc = spinner_val
 
-        now = datetime.now().strftime('%d.%m.%Y %H:%M')
-        arrive = (datetime.now() + timedelta(hours=hours)).strftime('%d.%m.%Y %H:%M')
+        now_dt = datetime.now()
+        now = now_dt.strftime('%d.%m.%Y %H:%M')
+
+        # Дата/время прибытия — из календаря и picker'а времени
+        if self.arrival_date and self.arrival_time:
+            try:
+                arrive_dt = datetime.strptime(
+                    f"{self.arrival_date} {self.arrival_time}",
+                    "%Y-%m-%d %H:%M"
+                )
+                arrive = arrive_dt.strftime('%d.%m.%Y %H:%M')
+            except Exception as e:
+                print(f"[uber] ошибка разбора даты/времени: {e}")
+                arrive = (now_dt + timedelta(hours=2)).strftime('%d.%m.%Y %H:%M')
+        else:
+            # Fallback — +2 часа
+            arrive = (now_dt + timedelta(hours=2)).strftime('%d.%m.%Y %H:%M')
 
         mode = self.ids.moto_spinner.text
 
@@ -1464,6 +1684,11 @@ class SettingsWindow(MDScreen):
         super().__init__(**kw)
         self.dialog = None
         self.file_manager = None
+
+    def logout(self):
+        """Выход из аккаунта."""
+        api.clear_token()
+        MDApp.get_running_app().go_to("LoginWindow")
 
     def open_file_manager(self):
         open_file_chooser(self.select_path, ext=[".xls", ".xlsx", ".csv"])
@@ -2160,12 +2385,68 @@ class WindowManager(MDScreenManager):
 # ГЛАВНОЕ ПРИЛОЖЕНИЕ
 # ────────────────────────────────────────────────────────────────
 class UberGoorandaApp(MDApp):
+    PUBLIC_SCREENS = {"LoginWindow"}  # ← экраны, доступные без токена
+
+    def go_to(self, screen_name, direction="left"):
+        if screen_name not in self.PUBLIC_SCREENS and not api.is_authorized():
+            screen_name = "LoginWindow"
+            direction = "right"
+        self._blur_all_inputs()
+        self.root.current = screen_name
+        self.root.transition.direction = direction
+
+    def go_back(self, screen_name):
+        if screen_name not in self.PUBLIC_SCREENS and not api.is_authorized():
+            screen_name = "LoginWindow"
+        self._blur_all_inputs()
+        self.root.current = screen_name
+        self.root.transition.direction = "right"
+
     def on_start(self):
         db.init_db()
-        import rdb
-        print(f"[RDB] db_path = {rdb.db_path()}")
-        print(f"[RDB] exists   = {os.path.exists(rdb.db_path())}")
-        print(f"[RDB] size     = {os.path.getsize(rdb.db_path()) if os.path.exists(rdb.db_path()) else 0}")
+
+        # ── Проверка токена ──
+        if api.is_authorized():
+            me = api.fetch_me()
+
+            if me:
+                # Токен валиден — автологин
+                api.user_id = me["id"]
+                api.role = me["role"]
+                api.first_name = me["first_name"]
+                print(f"[app] вошли как {me['first_name']} (role={me['role']})")
+                Clock.schedule_once(
+                    lambda dt: self.go_to("Gooranda"), 0.3
+                )
+                return
+
+            # Токен есть, но fetch_me вернул None — разбираемся почему
+            err = getattr(api, "last_error", None)
+
+            if err == "expired":
+                # Сервер явно сказал «токен невалиден» — чистим
+                print("[app] токен протух (401) — очищаем, логинимся заново")
+                api.clear_token()
+                # остаёмся на LoginWindow (sm.current уже = "LoginWindow")
+
+            elif err == "offline":
+                # Сеть недоступна — НЕ трогаем токен, работаем офлайн
+                print("[app] сервер недоступен — работаем в offline-режиме")
+                # пользователь остаётся на LoginWindow, но токен сохранён;
+                # при попытке открыть защищённый экран — редирект не сработает
+                # (is_authorized=True), но HTTP-запросы вернут offline.
+                # Это лучше, чем каждый раз вводить пароль.
+                # Можно сразу переходить в Gooranda, если хочешь:
+                Clock.schedule_once(
+                    lambda dt: self.go_to("Gooranda"), 0.3
+                )
+
+            else:
+                # Что-то другое (500 и т.п.) — оставляем токен на всякий случай
+                print(f"[app] /auth/me ошибка ({err}) — остаёмся на LoginWindow")
+
+        else:
+            print("[app] токена нет — показываем LoginWindow")
 
 
 
@@ -2179,8 +2460,7 @@ class UberGoorandaApp(MDApp):
         "📸 ДВ", "🔑 РАБОТЫ ПО ЗАДАНИЮ",
         "❤️ Обязательные процедуры",
     ]
-    TIME_OPTIONS = ["Назначить время", "1 час", "2 часа",
-                    "3 часа", "4 часа", "5 часов", "6 часов"]
+
     WORK_DESC_OPTIONS = [
         "⚙️ Провести ТО Базовой станции",
         "🪫 Запитать БС от ДГУ",
@@ -2209,7 +2489,7 @@ class UberGoorandaApp(MDApp):
         Builder.load_file(resource_path('ui.kv'))
 
         sm = WindowManager()
-        #sm.add_widget(LoginWindow(name="LoginWindow"))
+        sm.add_widget(LoginWindow(name="LoginWindow"))
         sm.add_widget(GoorandaWindow(name="Gooranda"))
         sm.add_widget(UberWindow(name="Uber"))
         sm.add_widget(WorkerWindow(name="WorkerWindow"))
@@ -2219,6 +2499,8 @@ class UberGoorandaApp(MDApp):
         sm.add_widget(TorusWindow(name="TorusWindow"))
         sm.add_widget(NetworkTabsWindow(name="NetworkTabsWindow"))
         sm.add_widget(BirthdayWindow(name="BirthdayWindow"))
+
+        sm.current = "LoginWindow"
 
         Window.softinput_mode = 'below_target'
         Window.softinput_mode_target_margin = dp(20)  # 20dp запаса
@@ -2254,13 +2536,19 @@ class UberGoorandaApp(MDApp):
         except Exception:
             pass
 
+    PUBLIC_SCREENS = {"LoginWindow"}
+
     def go_to(self, screen_name, direction="left"):
-        self._blur_all_inputs()  # ← ПЕРЕД сменой экрана
+        if screen_name not in self.PUBLIC_SCREENS and not api.is_authorized():
+            screen_name = "LoginWindow"
+        self._blur_all_inputs()
         self.root.current = screen_name
         self.root.transition.direction = direction
 
     def go_back(self, screen_name):
-        self._blur_all_inputs()  # ← ПЕРЕД сменой экрана
+        if screen_name not in self.PUBLIC_SCREENS and not api.is_authorized():
+            screen_name = "LoginWindow"
+        self._blur_all_inputs()
         self.root.current = screen_name
         self.root.transition.direction = "right"
 
@@ -2343,8 +2631,6 @@ class UberGoorandaApp(MDApp):
     def open_work_type_menu(self, caller):
         self.open_menu(caller, self.WORK_TYPE_OPTIONS)
 
-    def open_time_menu(self, caller):
-        self.open_menu(caller, self.TIME_OPTIONS)
 
     def open_work_desc_menu(self, caller):
         def on_select(value):

@@ -450,12 +450,7 @@
                     on_release: app.go_back("Uber")
 
 
-# ────────────────────────────────────────────────────────────────
-# UBER — главный экран
-# ────────────────────────────────────────────────────────────────
-# ────────────────────────────────────────────────────────────────
-# UBER — главный экран
-# ────────────────────────────────────────────────────────────────
+
 # ────────────────────────────────────────────────────────────────
 # UBER — главный экран
 # ────────────────────────────────────────────────────────────────
@@ -641,18 +636,29 @@
                         on_release: root.clear_description()
 
                 # ── Время ──
+                # ── Дата и время прибытия ──
                 MDBoxLayout:
                     orientation: "horizontal"
                     size_hint_y: None
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    FixedDropDownItem:
-                        id: time_to_go_spinner
-                        text: "Назначить время"
-                        size_hint_x: 1
-                        pos_hint: {"center_y": .5}
-                        on_release: app.open_time_menu(time_to_go_spinner)
+                    RoundedButton:
+                        id: date_button
+                        text: "📅 " + (root.arrival_date_display or "Дата")
+                        size_hint_x: 0.5
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
+                        on_release: root.open_date_picker()
+
+                    RoundedButton:
+                        id: time_button
+                        text: "🕐 " + (root.arrival_time or "Время")
+                        size_hint_x: 0.5
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
+                        on_release: root.open_time_picker()
+
 
                 # ── Label «Выбери исполнителей» — КРАСНЫЙ ──
                 MDBoxLayout:
@@ -795,6 +801,15 @@
                 color: COLOR_ON_DARK
                 pos_hint: {"center_x": 0.5}
                 on_release: root.open_file_manager()
+
+                # ── Кнопка выхода из аккаунта ──
+            RoundedButton:
+                text: "ВЫЙТИ ИЗ АККАУНТА"
+                background_color: COLOR_DANGER
+                color: COLOR_ON_DARK
+                pos_hint: { "center_x": 0.5 }
+                on_release: root.logout()
+
 
 
 
