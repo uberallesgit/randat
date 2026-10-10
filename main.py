@@ -49,6 +49,7 @@ import re
 from paths import resource_path, service_path
 from api_client import api
 from kivy.properties import StringProperty, ObjectProperty
+from kivy.core.text import LabelBase
 
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
@@ -56,6 +57,16 @@ os.environ['KIVY_GLES_LIMITS'] = '0'
 os.environ['KIVY_NO_ARGS'] = '1'
 
 TEXT_COLOR = (0.2,0.2,0.2,1)#(0.25, 0.28, 0.33, 1)
+
+# ── Регистрируем Roboto с эмодзи как основной шрифт ──
+LabelBase.register(
+    name='Roboto',
+    fn_regular=resource_path('fonts/RobotoEmoji.ttf'),
+    fn_bold=resource_path('fonts/RobotoEmoji.ttf'),
+    fn_italic=resource_path('fonts/RobotoEmoji.ttf'),
+    fn_bolditalic=resource_path('fonts/RobotoEmoji.ttf'),
+)
+
 
 
 
@@ -1183,6 +1194,13 @@ class UberWindow(MDScreen):
         # Загружаем базу
         UberWindow.RDB = rdb.load_rdb()
 
+    def _get_owner_full_name(self):
+        """ФИО владельца заявки из авторизации."""
+        from api_client import api
+        parts = [api.last_name, api.first_name, api.middle_name]
+        full_name = " ".join(p for p in parts if p).strip()
+        return full_name or api.first_name or "—"
+
         # 2. Метод для проверки одиночная БС или их несколько (вызывается при вводе текста)
     def check_plural_bs(self, text):
         # Если в тексте есть пробелы, значит введено несколько БС
@@ -1192,53 +1210,76 @@ class UberWindow(MDScreen):
             self.plural = False
 
     def on_kv_post(self, *_):
-        # Номер заявки
+        # ── Номер заявки ──
         try:
             with open(service_path('crwo_cnt.txt'), "r", encoding="utf-8") as f:
                 self.ids.crwo_number.text = f.read().strip()
         except FileNotFoundError:
             self.ids.crwo_number.text = ""
-        # Ответственный
-        try:
-            with open(service_path('responsible.txt'), "r", encoding="utf-8") as f:
-                self.ids.respo_worker.text = f.read().strip()
-        except FileNotFoundError:
-            self.ids.respo_worker.text = ""
 
-        if self.ids.respo_worker.text.strip():
-            self.ids.respo_view_label.text = f"Владелец заявки: {self.ids.respo_worker.text.strip()}"
-            self.ids.respo_edit_box.height = 0
-            self.ids.respo_edit_box.opacity = 0
-            self.ids.respo_edit_box.disabled = True
-            self.ids.respo_view_box.height = dp(56)
-            self.ids.respo_view_box.opacity = 1
-            self.ids.respo_view_box.disabled = False
+        # ── Владелец заявки (из авторизации) ──
+        self._set_owner_from_auth()
+
+    def on_pre_enter(self, *args):
+        UberWindow.RDB = rdb.load_rdb()
+        self._set_owner_from_auth()
+
+    def _set_owner_from_auth(self):
+        """Владелец заявки = текущий авторизованный пользователь."""
+        from api_client import api
+
+        # ФИО из api
+        parts = [api.last_name, api.first_name, api.middle_name]
+        full_name = " ".join(p for p in parts if p).strip()
+
+        if not full_name:
+            full_name = api.first_name or "—"
+
+        self.ids.respo_view_label.text = f"Владелец заявки: {full_name}"
+        print(f"[uber] владелец заявки: {full_name}")
 
     # ── Дата и время прибытия ──
     def open_date_picker(self):
-        """Открыть календарь MDDatePicker."""
+        """Открыть календарь. По умолчанию — сегодня или ранее выбранная дата."""
         from kivymd.uix.pickers import MDDatePicker
         from datetime import datetime
 
-        try:
-            if self.arrival_date:
+        today = datetime.now().date()
+
+        # Начальная дата
+        if self.arrival_date:
+            try:
                 init = datetime.strptime(self.arrival_date, "%Y-%m-%d").date()
-            else:
-                init = datetime.now().date()
-        except Exception:
-            init = datetime.now().date()
+                # Если сохранённая дата в прошлом — берём сегодня
+                if init < today:
+                    init = today
+            except Exception:
+                init = today
+        else:
+            init = today
 
         picker = MDDatePicker(
             year=init.year,
             month=init.month,
             day=init.day,
-            min_date=datetime.now().date(),
+            min_date=today,  # ← запрет прошлого
         )
         picker.bind(on_save=self._on_date_saved)
         picker.open()
 
     def _on_date_saved(self, instance, value, date_range):
-        """value — datetime.date."""
+        """value — datetime.date, выбранная пользователем."""
+        from datetime import datetime
+
+        today = datetime.now().date()
+
+        # Дополнительная защита на случай, если min_date не сработал
+        if value < today:
+            self.arrival_date = today.strftime("%Y-%m-%d")
+            self.arrival_date_display = today.strftime("%d.%m.%Y")
+            print(f"[uber] дата прибытия (принудительно сегодня): {self.arrival_date_display}")
+            return
+
         self.arrival_date = value.strftime("%Y-%m-%d")
         self.arrival_date_display = value.strftime("%d.%m.%Y")
         print(f"[uber] дата прибытия: {self.arrival_date_display}")
@@ -1436,52 +1477,20 @@ class UberWindow(MDScreen):
         with open(service_path('crwo_cnt.txt'), "w", encoding="utf-8") as f:
             f.write(str(value))
 
-    def write_responsible_worker(self, value):
-        with open(service_path('responsible.txt'), "w", encoding="utf-8") as f:
-            f.write(str(value))
-
-    def assign_responsible(self, *_):
-        print("=== assign_responsible вызван ===")
-        """Присвоить владельца: скрыть поле ввода, показать Label."""
-        name = self.ids.respo_worker.text.strip()
-        if not name:
-            self.show_dialog("Введите фамилию, прежде чем присвоить")
-            return
-
-        # Сохраняем в файл
-        self.write_responsible_worker(name)
-
-        # Обновляем Label
-        self.ids.respo_view_label.text = f"Владелец заявки:  {name}"
-
-        # Скрываем поле ввода
-        self.ids.respo_edit_box.height = 0
-        self.ids.respo_edit_box.opacity = 0
-        self.ids.respo_edit_box.disabled = True
-
-        # Показываем Label
-        self.ids.respo_view_box.height = dp(56)
-        self.ids.respo_view_box.opacity = 1
-        self.ids.respo_view_box.disabled = False
-
-    def edit_responsible(self, *_):
-        """Вернуть поле ввода обратно, чтобы можно было изменить."""
-        self.ids.respo_edit_box.height = dp(56)
-        self.ids.respo_edit_box.opacity = 1
-        self.ids.respo_edit_box.disabled = False
-
-        self.ids.respo_view_box.height = 0
-        self.ids.respo_view_box.opacity = 0
-        self.ids.respo_view_box.disabled = True
+    # def write_responsible_worker(self, value):
+    #     with open(service_path('responsible.txt'), "w", encoding="utf-8") as f:
+    #         f.write(str(value))
 
     # ── Валидация и старт ──
     def start(self):
         mode = self.ids.moto_spinner.text
         count, warn = 0, ""
-
+        if not api.is_authorized():
+            count += 1;
+            warn += f"{count}. Вы не авторизованы\n"
         if not self.ids.crwo_number.text:
             count += 1; warn += f"{count}. Не заполнен номер заявки\n"
-        if not self.ids.respo_worker.text:
+        if not self._get_owner_full_name():
             count += 1; warn += f"{count}. Нужно ввести фамилию ответственного\n"
         if self.ids.choose_workers_label.text in ("Выбери исполнителей: ", ""):
             count += 1; warn += f"{count}. Не выбран ни один сотрудник\n"
@@ -1524,7 +1533,7 @@ class UberWindow(MDScreen):
         crwo_number = f"CRWO_{self.ids.region_short.text}_{prefix}{crwo_num}"
         self.plural = False
         if self.ids.organization.text == "ПО ЮСТК":
-            responsibles = self.ids.respo_worker.text
+            responsibles = self._get_owner_full_name()
             organization = f"🐝{self.ids.organization.text}"
         else:
             responsibles = self.ids.choose_workers_label.text
@@ -2404,17 +2413,20 @@ class UberGoorandaApp(MDApp):
 
     def on_start(self):
         db.init_db()
+        rdb.init_db()
 
         # ── Проверка токена ──
         if api.is_authorized():
             me = api.fetch_me()
-
             if me:
                 # Токен валиден — автологин
                 api.user_id = me["id"]
                 api.role = me["role"]
                 api.first_name = me["first_name"]
-                print(f"[app] вошли как {me['first_name']} (role={me['role']})")
+                api.last_name = me.get("last_name")  # ← добавить
+                api.middle_name = me.get("middle_name")  # ← добавить
+                print(f"[debug] api.first_name = {api.first_name!r}")  # ← добавить
+                print(f"[debug] api.last_name  = {api.last_name!r}")  # ← добавить
                 Clock.schedule_once(
                     lambda dt: self.go_to("Gooranda"), 0.3
                 )
@@ -2487,6 +2499,12 @@ class UberGoorandaApp(MDApp):
 
 
         Builder.load_file(resource_path('ui.kv'))
+
+        # Регистрируем эмодзи-шрифт
+        LabelBase.register(
+            name='Emoji',
+            fn_regular=resource_path('fonts/NotoEmoji-Regular.ttf'),
+        )
 
         sm = WindowManager()
         sm.add_widget(LoginWindow(name="LoginWindow"))
@@ -2630,7 +2648,6 @@ class UberGoorandaApp(MDApp):
 
     def open_work_type_menu(self, caller):
         self.open_menu(caller, self.WORK_TYPE_OPTIONS)
-
 
     def open_work_desc_menu(self, caller):
         def on_select(value):

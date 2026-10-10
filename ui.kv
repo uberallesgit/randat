@@ -305,7 +305,7 @@
                 on_text: root.filter_workers(self.text)
 
             RoundedButton:
-                text: "ОЧИСТИТЬ"
+                text: "🧹ОЧИСТИТЬ"
                 background_color: COLOR_DARK
                 color: COLOR_ON_DARK
                 size_hint_x: None
@@ -532,7 +532,7 @@
                         pos_hint: {"center_y": .5}
 
                     RoundedButton:
-                        text: "Очистить"
+                        text: "🧹Очистить"
                         background_color: COLOR_DANGER
                         color: COLOR_ON_DARK
                         size_hint_x: None
@@ -625,7 +625,7 @@
                         max_height: "120dp"
 
                     RoundedButton:
-                        text: "Очистить"
+                        text: "🧹Очистить"
                         size_hint_x: None
                         background_color: COLOR_DANGER
                         color: COLOR_ON_DARK
@@ -697,59 +697,23 @@
 
                     Widget:
 
-                # ── Ответственный: режим ввода ──
+
+                # ── Владелец заявки (из авторизации) ──
                 MDBoxLayout:
-                    id: respo_edit_box
+                    id: respo_view_box
                     orientation: "horizontal"
                     size_hint_y: None
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    MDTextField:
-                        id: respo_worker
-                        hint_text: "Выдал заявку (Фамилия)"
-                        input_type: "text"
-                        mode: "rectangle"
-                        size_hint_y: None
-                        height: "48dp"
-                        pos_hint: {"center_y": .5}
-                        on_text_validate: root.assign_responsible()
-
-                    RoundedButton:
-                        text: "Присвоить"
-                        size_hint_x: None
-                        height: "48dp"
-                        width: "120dp"
-                        pos_hint: {"center_y": .5}
-                        on_press: root.assign_responsible()
-
-                # ── Ответственный: режим просмотра ──
-                MDBoxLayout:
-                    id: respo_view_box
-                    orientation: "horizontal"
-                    size_hint_y: None
-                    height: 0
-                    opacity: 0
-                    disabled: True
-                    spacing: SPACE_SM
-
                     MDLabel:
                         id: respo_view_label
-                        text: ""
+                        text: "Владелец заявки: —"
                         theme_text_color: "Custom"
                         text_color: COLOR_DARK
                         font_style: "Body1"
                         valign: "middle"
                         padding: SPACE_MD, 0
-
-                    # ── Кнопка «Изменить» — высота уменьшена вдвое (24dp) ──
-                    RoundedButton:
-                        text: "Изменить"
-                        size_hint_x: None
-                        width: "120dp"
-                        height: "24dp"
-                        pos_hint: {"center_y": .5}
-                        on_release: root.edit_responsible()
 
         # ── Кнопка формирования (по центру) ──
         FloatLayout:

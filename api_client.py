@@ -35,6 +35,8 @@ class ApiClient:
         self.user_id = None
         self.role = None
         self.first_name = None
+        self.last_name = None  # ← должно быть
+        self.middle_name = None  # ← должно быть
         self.last_error = None  # ← новое
 
         # HTTP-сессия с автоматическими повторами
