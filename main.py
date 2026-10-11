@@ -1533,7 +1533,7 @@ class UberWindow(MDScreen):
         crwo_number = f"CRWO_{self.ids.region_short.text}_{prefix}{crwo_num}"
         self.plural = False
         if self.ids.organization.text == "ПО ЮСТК":
-            responsibles = self._get_owner_full_name()
+            responsibles = self._get_owner_full_name().split()[0]+ " " + self._get_owner_full_name().split()[1][0]+"."
             organization = f"🐝{self.ids.organization.text}"
         else:
             responsibles = self.ids.choose_workers_label.text
