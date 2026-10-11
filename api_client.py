@@ -21,7 +21,7 @@ from paths import service_path
 # Пока нет домена — используем IP WSL.
 # Когда купишь домен и настроишь HTTPS — поменяешь на:
 #   API_URL = "https://api.tvoyproekt.ru"
-API_URL = "http://localhost"      # ← ЗАМЕНИ на свой IP (hostname -I)
+API_URL = "http://172.31.101.119"      # ← ЗАМЕНИ на свой IP (hostname -I)
 API_PREFIX = "/api/v1"
 
 # Таймауты (секунды)

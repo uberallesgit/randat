@@ -483,13 +483,13 @@
                     height: SIZE_ROW
                     spacing: SPACE_SM
 
-                    RoundedButton:
-                        text: "-1"
-                        size_hint_x: None
-                        width: "60dp"
-                        height: "48dp"
-                        pos_hint: {"center_y": .5}
-                        on_release: root.crwo_decrement(root.ids.crwo_number.text)
+#                    RoundedButton:
+#                        text: "-1"
+#                        size_hint_x: None
+#                        width: "60dp"
+#                        height: "48dp"
+#                        pos_hint: {"center_y": .5}
+#                        on_release: root.crwo_decrement(root.ids.crwo_number.text)
 
                     MDTextField:
                         id: crwo_number
@@ -728,8 +728,8 @@
                 size: "250dp", "64dp"
                 pos_hint: {"center_x": 0.5, "center_y": 0.5}
                 on_release:
-                    root.write_crwo_list(crwo_number.text)
-                    app.go_to("CrwoWindow")
+#                    root.write_crwo_list(crwo_number.text)
+#                    app.go_to("CrwoWindow")
                     root.start()
 
 # тестовый коммент

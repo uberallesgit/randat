@@ -286,14 +286,12 @@ class GoorandaWindow(MDScreen):
 
     def _refresh_birthdays_ui(self, *args):
         """Обновляет бейдж и output_text с именинниками."""
-        print("=== _refresh_birthdays_ui вызван ===")
+
 
         # ── Бейдж ──
         try:
             count = count_upcoming_birthdays(7)
-            print(f"[Gooranda] count={count}")
             self.ids.gooranda_header.badge_text = str(count) if count > 0 else ""
-            print(f"[Gooranda] badge_text={self.ids.gooranda_header.badge_text!r}")
         except Exception as e:
             print(f"_refresh badge: {e}")
 
@@ -301,7 +299,6 @@ class GoorandaWindow(MDScreen):
         try:
             if not self.ids.output_text.text.strip():
                 text = build_upcoming_birthdays_text(7)
-                print(f"[Gooranda] text len={len(text)}")
                 if text:
                     self.ids.output_text.text = text
         except Exception as e:
@@ -1210,12 +1207,6 @@ class UberWindow(MDScreen):
             self.plural = False
 
     def on_kv_post(self, *_):
-        # ── Номер заявки ──
-        try:
-            with open(service_path('crwo_cnt.txt'), "r", encoding="utf-8") as f:
-                self.ids.crwo_number.text = f.read().strip()
-        except FileNotFoundError:
-            self.ids.crwo_number.text = ""
 
         # ── Владелец заявки (из авторизации) ──
         self._set_owner_from_auth()
@@ -1464,58 +1455,264 @@ class UberWindow(MDScreen):
         if string.isdigit():
             self.ids.crwo_number.text = str(int(string) + 1)
         else:
-            self.ids.crwo_number.text = "0"
+            self.ids.crwo_number.text = "1"
 
-    def crwo_decrement(self, string):
-        if string.isdigit():
-            self.ids.crwo_number.text = str(int(string) - 1)
-        else:
-            self.ids.crwo_number.text = "0"
-
-    # ── Запись в service/ ──
-    def write_crwo_list(self, value):
-        with open(service_path('crwo_cnt.txt'), "w", encoding="utf-8") as f:
-            f.write(str(value))
-
-    # def write_responsible_worker(self, value):
-    #     with open(service_path('responsible.txt'), "w", encoding="utf-8") as f:
-    #         f.write(str(value))
+    # def crwo_decrement(self, string):
+    #     if string.isdigit():
+    #         self.ids.crwo_number.text = str(int(string) - 1)
+    #     else:
+    #         self.ids.crwo_number.text = "0"
 
     # ── Валидация и старт ──
     def start(self):
+        """Валидация + проверка номера CRWO на сервере."""
+        import threading
+
         mode = self.ids.moto_spinner.text
         count, warn = 0, ""
+
         if not api.is_authorized():
-            count += 1;
+            count += 1
             warn += f"{count}. Вы не авторизованы\n"
+
         if not self.ids.crwo_number.text:
-            count += 1; warn += f"{count}. Не заполнен номер заявки\n"
-        if not self._get_owner_full_name():
-            count += 1; warn += f"{count}. Нужно ввести фамилию ответственного\n"
+            count += 1
+            warn += f"{count}. Не заполнен номер заявки\n"
+
         if self.ids.choose_workers_label.text in ("Выбери исполнителей: ", ""):
-            count += 1; warn += f"{count}. Не выбран ни один сотрудник\n"
+            count += 1
+            warn += f"{count}. Не выбран ни один сотрудник\n"
 
         if mode == "БС":
             if not self.ids.bs_name.text:
-                count += 1; warn += f"{count}. Не заполнен номер БС\n"
-            # if self.ids.tt_spinner.text == "TT" and not self.ids.tt_number.text:
-            #     count += 1; warn += f"{count}. Не заполнен номер ТТ\n"
-
-            if self.ids.work_description_spinner.text == "Ввести свой вариант" \
-                    and not self.ids.work_description.text.strip():
                 count += 1
-                warn += f"{count}. Вы выбрали «Ввести свой вариант», но не заполнили описание работ\n"
+                warn += f"{count}. Не заполнен номер БС\n"
+            if (self.ids.work_description_spinner.text == "Ввести свой вариант"
+                    and not self.ids.work_description.text.strip()):
+                count += 1
+                warn += (f"{count}. Вы выбрали «Ввести свой вариант», "
+                         f"но не заполнили описание работ\n")
         elif mode == "Офис":
             if not self.ids.work_description.text:
-                count += 1; warn += (f"{count}. Активен режим 'Офис', "
-                                     f"заполнение поля 'Описание работ' ОБЯЗАТЕЛЬНО!\n")
+                count += 1
+                warn += (f"{count}. Активен режим 'Офис', "
+                         f"заполнение поля 'Описание работ' ОБЯЗАТЕЛЬНО!\n")
+
+        if not self.arrival_date or not self.arrival_time:
+            count += 1
+            warn += f"{count}. Не выбрана дата и/или время прибытия\n"
 
         if warn:
             self.show_dialog(warn)
             return False
 
-        self.uber_make_output_sheet()
+        # ── Проверка номера CRWO ──
+        region = self.ids.region_short.text
+        value_str = self.ids.crwo_number.text.strip()
+
+        if not value_str.isdigit():
+            self.show_dialog("Номер CRWO должен быть числом")
+            return False
+
+        value = int(value_str)
+        print(f"[uber] start: проверка {region}-{value}")
+
+        threading.Thread(
+            target=self._check_and_proceed,
+            args=(region, value),
+            daemon=True,
+        ).start()
+
         return True
+
+    def _check_and_proceed(self, region, value):
+        """Фоновая проверка номера. Вызывается из start()."""
+        from sync import check_crwo_number
+        from kivy.clock import Clock
+
+        print(f"[uber] _check_and_proceed({region}, {value})")
+
+        result = check_crwo_number(region, value)
+        print(f"[uber] check result: {result}")
+
+        if result["status"] == "free":
+            Clock.schedule_once(
+                lambda dt: self._finalize_and_show(region, value, forced=False),
+                0,
+            )
+        elif result["status"] == "taken":
+            Clock.schedule_once(
+                lambda dt: self._show_taken_dialog(region, value, result),
+                0,
+            )
+        else:  # offline
+            Clock.schedule_once(
+                lambda dt: self._show_offline_and_proceed(region, value),
+                0,
+            )
+
+    def _finalize_and_show(self, region, value, forced):
+        """Сформировать заявку и перейти на CrwoWindow."""
+        from sync import commit_crwo_number
+        from kivymd.app import MDApp
+
+        print(f"[uber] finalize: region={region}, value={value}, forced={forced}")
+
+        commit_crwo_number(region, value, forced=forced)
+
+        self.uber_make_output_sheet()
+
+        MDApp.get_running_app().go_to("CrwoWindow")
+
+    def _show_taken_dialog(self, region, value, result):
+        """Диалог: номер уже использован."""
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivymd.uix.label import MDLabel
+        from kivy.metrics import dp
+        from datetime import datetime
+
+        used_by = result.get("used_by") or "неизвестно"
+        used_at = result.get("used_at") or ""
+        next_free = result.get("next_free")
+
+        try:
+            dt = datetime.fromisoformat(used_at)
+            used_at_str = dt.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            used_at_str = used_at
+
+        msg = (
+            f"Заявка с номером CRWO_{region}_{value:08d} "
+            f"уже выдавалась.\n\n"
+            f"Кем: {used_by}\n"
+            f"Когда: {used_at_str}\n\n"
+            f"Что сделать?"
+        )
+
+        content = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
+        content.add_widget(MDLabel(
+            text=msg, halign="center",
+            size_hint_y=None, height=dp(140),
+            theme_text_color="Custom", text_color=(0, 0, 0, 1),
+        ))
+
+        buttons = BoxLayout(orientation="horizontal", spacing=dp(8),
+                            size_hint_y=None, height=dp(60))
+
+        popup = Popup(
+            title="Номер уже использован",
+            title_color=(0.9, 0.3, 0.3, 1),
+            title_size=dp(16),
+            content=content,
+            size_hint=(0.9, 0.5),
+            background="", background_color=(1, 1, 1, 1),
+            auto_dismiss=False,
+        )
+
+        def _force(*_):
+            popup.dismiss()
+            self._finalize_and_show(region, value, forced=True)
+
+        def _use_next(*_):
+            popup.dismiss()
+            self.ids.crwo_number.text = str(next_free)
+            self._finalize_and_show(region, next_free, forced=False)
+
+        def _cancel(*_):
+            popup.dismiss()
+
+        btn_force = Button(
+            text="Использовать\nвсё равно",
+            background_normal="",
+            background_color=(0.9, 0.6, 0.2, 1),
+            color=(1, 1, 1, 1), bold=True, font_size=dp(12),
+        )
+        btn_force.bind(on_release=_force)
+
+        btn_next = Button(
+            text=f"Использовать\n{next_free}",
+            background_normal="",
+            background_color=(0.42, 0.16, 0.85, 1),
+            color=(1, 1, 1, 1), bold=True, font_size=dp(12),
+        )
+        btn_next.bind(on_release=_use_next)
+
+        btn_cancel = Button(
+            text="Отмена",
+            background_normal="",
+            background_color=(0.6, 0.6, 0.6, 1),
+            color=(1, 1, 1, 1), bold=True, font_size=dp(12),
+        )
+        btn_cancel.bind(on_release=_cancel)
+
+        buttons.add_widget(btn_force)
+        buttons.add_widget(btn_next)
+        buttons.add_widget(btn_cancel)
+        content.add_widget(buttons)
+
+        popup.open()
+
+    def _show_offline_and_proceed(self, region, value):
+        """Предупреждение offline, потом формирование без коммита."""
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivymd.uix.label import MDLabel
+        from kivy.metrics import dp
+
+        content = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
+        content.add_widget(MDLabel(
+            text=("Нет связи с сервером.\n\n"
+                  "Заявка будет сформирована без проверки номера. "
+                  "Если номер уже использовался — возможен дубликат."),
+            halign="center",
+            size_hint_y=None, height=dp(120),
+            theme_text_color="Custom", text_color=(0, 0, 0, 1),
+        ))
+
+        buttons = BoxLayout(orientation="horizontal", spacing=dp(8),
+                            size_hint_y=None, height=dp(48))
+
+        popup = Popup(
+            title="Нет связи",
+            title_color=(0.9, 0.6, 0.2, 1),
+            title_size=dp(16),
+            content=content,
+            size_hint=(0.9, 0.4),
+            background="", background_color=(1, 1, 1, 1),
+            auto_dismiss=False,
+        )
+
+        def _ok(*_):
+            popup.dismiss()
+            self._finalize_and_show(region, value, forced=True)
+
+        def _cancel(*_):
+            popup.dismiss()
+
+        btn_ok = Button(
+            text="Сформировать",
+            background_normal="",
+            background_color=(0.42, 0.16, 0.85, 1),
+            color=(1, 1, 1, 1), bold=True,
+        )
+        btn_ok.bind(on_release=_ok)
+
+        btn_cancel = Button(
+            text="Отмена",
+            background_normal="",
+            background_color=(0.6, 0.6, 0.6, 1),
+            color=(1, 1, 1, 1), bold=True,
+        )
+        btn_cancel.bind(on_release=_cancel)
+
+        buttons.add_widget(btn_ok)
+        buttons.add_widget(btn_cancel)
+        content.add_widget(buttons)
+
+        popup.open()
 
     # ── Формирование заявки ──
     def uber_make_output_sheet(self):
@@ -2035,7 +2232,7 @@ class BirthdayWindow(MDScreen):
             con.close()
             return [{"position": r[0] or "", "name": r[1] or "", "birth_date": r[2] or ""} for r in rows]
         except Exception as e:
-            print(f"_load_records: {e}")
+            #print(f"_load_records: {e}")
             return []
 
     # ── Парсинг даты из разных форматов ──
@@ -2754,8 +2951,7 @@ def _parse_date_str(s):
 def count_upcoming_birthdays(days=7):
     """Сколько сотрудников отмечают ДР в ближайшие N дней (включая сегодня)."""
     db_path = service_path('birthdays.db')
-    print(f"[count] db_path = {db_path}")
-    print(f"[count] exists = {os.path.exists(db_path)}")
+
 
     if not os.path.exists(db_path):
         return 0
@@ -2770,11 +2966,11 @@ def count_upcoming_birthdays(days=7):
         print(f"[count] ошибка чтения БД: {e}")
         return 0
 
-    print(f"[count] записей в БД: {len(rows)}")
+
 
     today = datetime.now().date()
     end = today + timedelta(days=days)
-    print(f"[count] сегодня={today}, конец диапазона={end}")
+
     count = 0
 
     for (name, bd_str) in rows:
@@ -2794,7 +2990,7 @@ def count_upcoming_birthdays(days=7):
             except ValueError:
                 bd_this_year = bd.replace(year=today.year + 1, day=28)
 
-        print(f"[count]   '{name}' — {bd} → {bd_this_year}")
+
 
         if today <= bd_this_year <= end:
             count += 1
