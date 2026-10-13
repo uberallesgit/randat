@@ -6,7 +6,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,pickle,txt,ttf,otf,json,csv,xlsx
 source.exclude_dirs = .git,.idea,__pycache__,bin,dist,build,.venv,backup,specula
 source.exclude_patterns = license,images/*/*.jpg
-source.include_patterns = service/*
+source.include_patterns = service/*,fonts/*,*.py,*.kv,*.json
 
 version = 1.0
 

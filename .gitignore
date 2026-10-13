@@ -17,9 +17,6 @@ service/
 *.log
 
 # Исходные шрифты (воспроизводятся через fonts/merge_fonts.py)
-fonts/Roboto-Regular.ttf
-fonts/NotoEmoji-Regular.ttf
-
 # OS
 .DS_Store
 Thumbs.db
