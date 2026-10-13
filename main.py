@@ -58,6 +58,19 @@ os.environ['KIVY_NO_ARGS'] = '1'
 
 TEXT_COLOR = (0.2,0.2,0.2,1)#(0.25, 0.28, 0.33, 1)
 
+print(f"[paths] cwd         = {os.getcwd()}")
+print(f"[paths] __file__    = {__file__}")
+print(f"[paths] ANDROID_PRIVATE = {os.environ.get('ANDROID_PRIVATE')}")
+_f = resource_path('fonts/RobotoEmoji.ttf')
+print(f"[paths] RobotoEmoji = {_f}")
+print(f"[paths] exists      = {os.path.exists(_f)}")
+if os.path.isdir(os.path.dirname(_f)):
+    print(f"[paths] ls fonts/   = {os.listdir(os.path.dirname(_f))}")
+else:
+    print(f"[paths] fonts/ dir missing")
+
+
+
 # ── Регистрируем Roboto с эмодзи как основной шрифт ──
 LabelBase.register(
     name='Roboto',
@@ -2627,8 +2640,6 @@ class UberGoorandaApp(MDApp):
                 api.first_name = me["first_name"]
                 api.last_name = me.get("last_name")  # ← добавить
                 api.middle_name = me.get("middle_name")  # ← добавить
-                print(f"[debug] api.first_name = {api.first_name!r}")  # ← добавить
-                print(f"[debug] api.last_name  = {api.last_name!r}")  # ← добавить
                 Clock.schedule_once(
                     lambda dt: self.go_to("Gooranda"), 0.3
                 )
