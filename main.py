@@ -50,6 +50,9 @@ from paths import resource_path, service_path
 from api_client import api
 from kivy.properties import StringProperty, ObjectProperty
 from kivy.core.text import LabelBase
+from datetime import date
+from sync import commit_crwo_number
+from kivymd.app import MDApp
 
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
@@ -1201,13 +1204,14 @@ class UberWindow(MDScreen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.dialog = None
+        self._date_reset_event = None  # ← НОВОЕ: таймер сброса даты
         # Загружаем базу
         UberWindow.RDB = rdb.load_rdb()
 
     def _get_owner_full_name(self):
         """ФИО владельца заявки из авторизации."""
         from api_client import api
-        parts = [api.last_name, api.first_name, api.middle_name]
+        parts = [api.last_name, api.first_name]
         full_name = " ".join(p for p in parts if p).strip()
         return full_name or api.first_name or "—"
 
@@ -1227,13 +1231,19 @@ class UberWindow(MDScreen):
     def on_pre_enter(self, *args):
         UberWindow.RDB = rdb.load_rdb()
         self._set_owner_from_auth()
+        # ── Если дата не выбрана — ставим сегодня ──
+        if not self.arrival_date:
+            today = date.today()
+            self.arrival_date = today.strftime("%Y-%m-%d")
+            self.arrival_date_display = today.strftime("%d.%m.%Y")
+            print(f"[uber] дата по умолчанию: {self.arrival_date_display}")
 
     def _set_owner_from_auth(self):
         """Владелец заявки = текущий авторизованный пользователь."""
         from api_client import api
 
         # ФИО из api
-        parts = [api.last_name, api.first_name, api.middle_name]
+        parts = [api.last_name, api.first_name]
         full_name = " ".join(p for p in parts if p).strip()
 
         if not full_name:
@@ -1244,17 +1254,24 @@ class UberWindow(MDScreen):
 
     # ── Дата и время прибытия ──
     def open_date_picker(self):
-        """Открыть календарь. По умолчанию — сегодня или ранее выбранная дата."""
-        from kivymd.uix.pickers import MDDatePicker
-        from datetime import datetime
+        """Свой календарь: три колонки — день, месяц, год. Без MDDatePicker.
+        По OK: сохраняет дату и запускает таймер сброса на 5 минут.
+        """
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.button import Button
+        from kivy.uix.scrollview import ScrollView
+        from kivymd.uix.label import MDLabel
+        from kivy.metrics import dp
+        from datetime import datetime, date
+        import calendar
 
         today = datetime.now().date()
 
-        # Начальная дата
+        # Начальные значения: сохранённая дата ИЛИ сегодня
         if self.arrival_date:
             try:
                 init = datetime.strptime(self.arrival_date, "%Y-%m-%d").date()
-                # Если сохранённая дата в прошлом — берём сегодня
                 if init < today:
                     init = today
             except Exception:
@@ -1262,31 +1279,206 @@ class UberWindow(MDScreen):
         else:
             init = today
 
-        picker = MDDatePicker(
-            year=init.year,
-            month=init.month,
-            day=init.day,
-            min_date=today,  # ← запрет прошлого
+        selected = {
+            "day": init.day,
+            "month": init.month,
+            "year": init.year,
+        }
+
+        MONTHS_RU = [
+            "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+            "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+        ]
+
+        # Годы: текущий + 4 вперёд
+        YEARS = list(range(today.year, today.year + 5))
+
+        # ── Корневой layout ──
+        content = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(8))
+
+        header = MDLabel(
+            text=f"Выбрано: {selected['day']:02d}.{selected['month']:02d}.{selected['year']}",
+            halign="center",
+            size_hint_y=None,
+            height=dp(36),
+            theme_text_color="Custom",
+            text_color=(0.2, 0.2, 0.2, 1),
         )
-        picker.bind(on_save=self._on_date_saved)
-        picker.open()
+        content.add_widget(header)
 
-    def _on_date_saved(self, instance, value, date_range):
-        """value — datetime.date, выбранная пользователем."""
-        from datetime import datetime
+        body = BoxLayout(orientation="horizontal", spacing=dp(8))
 
-        today = datetime.now().date()
+        day_buttons = []
+        month_buttons = []
+        year_buttons = []
 
-        # Дополнительная защита на случай, если min_date не сработал
-        if value < today:
-            self.arrival_date = today.strftime("%Y-%m-%d")
-            self.arrival_date_display = today.strftime("%d.%m.%Y")
-            print(f"[uber] дата прибытия (принудительно сегодня): {self.arrival_date_display}")
-            return
+        def refresh_colors():
+            for b in day_buttons:
+                is_sel = int(b.text) == selected["day"]
+                b.background_color = (0.42, 0.16, 0.85, 1) if is_sel else (0.95, 0.95, 0.97, 1)
+                b.color = (1, 1, 1, 1) if is_sel else (0.2, 0.2, 0.2, 1)
+            for b in month_buttons:
+                is_sel = MONTHS_RU.index(b.text) + 1 == selected["month"]
+                b.background_color = (0.42, 0.16, 0.85, 1) if is_sel else (0.95, 0.95, 0.97, 1)
+                b.color = (1, 1, 1, 1) if is_sel else (0.2, 0.2, 0.2, 1)
+            for b in year_buttons:
+                is_sel = int(b.text) == selected["year"]
+                b.background_color = (0.42, 0.16, 0.85, 1) if is_sel else (0.95, 0.95, 0.97, 1)
+                b.color = (1, 1, 1, 1) if is_sel else (0.2, 0.2, 0.2, 1)
 
-        self.arrival_date = value.strftime("%Y-%m-%d")
-        self.arrival_date_display = value.strftime("%d.%m.%Y")
-        print(f"[uber] дата прибытия: {self.arrival_date_display}")
+            header.text = f"Выбрано: {selected['day']:02d}.{selected['month']:02d}.{selected['year']}"
+
+        def make_day_handler(d):
+            def _h(*_):
+                selected["day"] = d
+                refresh_colors()
+
+            return _h
+
+        def make_month_handler(m):
+            def _h(*_):
+                selected["month"] = m
+                # Корректируем день, если в месяце меньше дней
+                max_day = calendar.monthrange(selected["year"], m)[1]
+                if selected["day"] > max_day:
+                    selected["day"] = max_day
+                refresh_colors()
+
+            return _h
+
+        def make_year_handler(y):
+            def _h(*_):
+                selected["year"] = y
+                max_day = calendar.monthrange(y, selected["month"])[1]
+                if selected["day"] > max_day:
+                    selected["day"] = max_day
+                refresh_colors()
+
+            return _h
+
+        # ── Колонка «День» ──
+        days_scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        days_layout = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(2))
+        days_layout.bind(minimum_height=days_layout.setter("height"))
+        for d in range(1, 32):
+            b = Button(
+                text=f"{d:02d}",
+                size_hint_y=None,
+                height=dp(36),
+                background_normal="",
+                font_size=dp(14),
+            )
+            b.bind(on_release=make_day_handler(d))
+            day_buttons.append(b)
+            days_layout.add_widget(b)
+        days_scroll.add_widget(days_layout)
+
+        # ── Колонка «Месяц» ──
+        months_scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        months_layout = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(2))
+        months_layout.bind(minimum_height=months_layout.setter("height"))
+        for i, m_name in enumerate(MONTHS_RU, start=1):
+            b = Button(
+                text=m_name,
+                size_hint_y=None,
+                height=dp(36),
+                background_normal="",
+                font_size=dp(14),
+            )
+            b.bind(on_release=make_month_handler(i))
+            month_buttons.append(b)
+            months_layout.add_widget(b)
+        months_scroll.add_widget(months_layout)
+
+        # ── Колонка «Год» ──
+        years_scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        years_layout = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(2))
+        years_layout.bind(minimum_height=years_layout.setter("height"))
+        for y in YEARS:
+            b = Button(
+                text=str(y),
+                size_hint_y=None,
+                height=dp(36),
+                background_normal="",
+                font_size=dp(14),
+            )
+            b.bind(on_release=make_year_handler(y))
+            year_buttons.append(b)
+            years_layout.add_widget(b)
+        years_scroll.add_widget(years_layout)
+
+        body.add_widget(days_scroll)
+        body.add_widget(months_scroll)
+        body.add_widget(years_scroll)
+        content.add_widget(body)
+
+        refresh_colors()  # первоначальная подсветка
+
+        # ── Кнопки OK / Отмена ──
+        buttons = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+        )
+
+        popup = Popup(
+            title="Выбор даты",
+            title_color=(0, 0, 0, 1),
+            title_size=dp(16),
+            content=content,
+            size_hint=(0.95, 0.6),
+            background="",
+            background_color=(1, 1, 1, 1),
+            auto_dismiss=False,
+        )
+
+        def _ok(*_):
+            try:
+                chosen = date(selected["year"], selected["month"], selected["day"])
+            except Exception as e:
+                print(f"[uber] ошибка даты: {e}")
+                popup.dismiss()
+                return
+
+            if chosen < today:
+                chosen = today
+                print("[uber] дата в прошлом — принудительно сегодня")
+
+            self.arrival_date = chosen.strftime("%Y-%m-%d")
+            self.arrival_date_display = chosen.strftime("%d.%m.%Y")
+            print(f"[uber] дата прибытия: {self.arrival_date_display}")
+
+            # ── Таймер сброса даты на 5 минут ──
+            self._schedule_date_reset()
+
+            popup.dismiss()
+
+        def _cancel(*_):
+            popup.dismiss()
+
+        btn_ok = Button(
+            text="OK",
+            background_normal="",
+            background_color=(0.2, 0.6, 1, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_ok.bind(on_release=_ok)
+
+        btn_cancel = Button(
+            text="Отмена",
+            background_normal="",
+            background_color=(0.9, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1),
+            bold=True,
+        )
+        btn_cancel.bind(on_release=_cancel)
+
+        buttons.add_widget(btn_ok)
+        buttons.add_widget(btn_cancel)
+        content.add_widget(buttons)
+        popup.open()
 
     def open_time_picker(self):
         """Диалог выбора времени: часы 0–23, минуты 00/15/30/45."""
@@ -1566,8 +1758,6 @@ class UberWindow(MDScreen):
 
     def _finalize_and_show(self, region, value, forced):
         """Сформировать заявку и перейти на CrwoWindow."""
-        from sync import commit_crwo_number
-        from kivymd.app import MDApp
 
         print(f"[uber] finalize: region={region}, value={value}, forced={forced}")
 
@@ -1575,7 +1765,29 @@ class UberWindow(MDScreen):
 
         self.uber_make_output_sheet()
 
+        self._schedule_date_reset()  # ← запланировать сброс через 5 минут
+
         MDApp.get_running_app().go_to("CrwoWindow")
+
+    def _schedule_date_reset(self):
+        """Сбросить arrival_date через 5 минут. Отменяет предыдущий таймер."""
+        from kivy.clock import Clock
+
+        # Отменяем предыдущий таймер, если был
+        if self._date_reset_event is not None:
+            self._date_reset_event.cancel()
+            self._date_reset_event = None
+
+        def _reset(dt):
+            """Обнулить дату — при следующем входе будет сегодня."""
+            self.arrival_date = ""
+            self.arrival_date_display = ""
+            print("[uber] дата сброшена — при следующем входе будет сегодня")
+            self._date_reset_event = None
+
+        # 300 секунд = 5 минут
+        self._date_reset_event = Clock.schedule_once(_reset, 300)
+        print("[uber] таймер сброса даты установлен (5 минут)")
 
     def _show_taken_dialog(self, region, value, result):
         """Диалог: номер уже использован."""
@@ -2638,8 +2850,7 @@ class UberGoorandaApp(MDApp):
                 api.user_id = me["id"]
                 api.role = me["role"]
                 api.first_name = me["first_name"]
-                api.last_name = me.get("last_name")  # ← добавить
-                api.middle_name = me.get("middle_name")  # ← добавить
+                api.last_name = me.get("last_name")
                 Clock.schedule_once(
                     lambda dt: self.go_to("Gooranda"), 0.3
                 )

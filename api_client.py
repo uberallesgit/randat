@@ -35,9 +35,8 @@ class ApiClient:
         self.user_id = None
         self.role = None
         self.first_name = None
-        self.last_name = None  # ← должно быть
-        self.middle_name = None  # ← должно быть
-        self.last_error = None  # ← новое
+        self.last_name = None
+        self.last_error = None
 
         # HTTP-сессия с автоматическими повторами
         self.s = requests.Session()
@@ -65,12 +64,14 @@ class ApiClient:
             print(f"[api] _load_token: {e}")
         return None
 
-    def save_token(self, token, user_id=None, role=None, first_name=None):
+    def save_token(self, token, user_id=None, role=None,
+                   first_name=None, last_name=None):
         """Сохранить токен и метаданные о пользователе."""
         self.token = token
         self.user_id = user_id
         self.role = role
         self.first_name = first_name
+        self.last_name = last_name  # ← ДОБАВЛЕНО
         try:
             with open(self._token_path(), 'w') as f:
                 f.write(token)
@@ -83,6 +84,7 @@ class ApiClient:
         self.user_id = None
         self.role = None
         self.first_name = None
+        self.last_name = None
         try:
             p = self._token_path()
             if os.path.exists(p):
@@ -139,10 +141,6 @@ class ApiClient:
     # ВЫСОКОУРОВНЕВЫЕ ХЕЛПЕРЫ
     # ────────────────────────────────────────────────────────────
     def login(self, first_name, last_name, password):
-        """
-        Возвращает dict с данными или None.
-        При успехе сам сохраняет токен.
-        """
         r = self.post("/auth/login", json={
             "first_name": first_name,
             "last_name": last_name,
@@ -155,6 +153,7 @@ class ApiClient:
                 user_id=data.get("user_id"),
                 role=data.get("role"),
                 first_name=data.get("first_name"),
+                last_name=data.get("last_name"),  # ← ДОБАВЛЕНО
             )
             return data
         return None
