@@ -1227,6 +1227,10 @@ class UberWindow(MDScreen):
 
         # ── Владелец заявки (из авторизации) ──
         self._set_owner_from_auth()
+        # Привязываем обновление номера к смене организации
+        self.ids.organization.bind(text=self._update_crwo_number)
+        # И к смене региона, так как номера могут отличаться по регионам
+        self.ids.region_short.bind(text=self._update_crwo_number)
 
     def on_pre_enter(self, *args):
         UberWindow.RDB = rdb.load_rdb()
@@ -1236,7 +1240,38 @@ class UberWindow(MDScreen):
             today = date.today()
             self.arrival_date = today.strftime("%Y-%m-%d")
             self.arrival_date_display = today.strftime("%d.%m.%Y")
+            self._update_crwo_number()
             print(f"[uber] дата по умолчанию: {self.arrival_date_display}")
+
+    def _update_crwo_number(self, *args):
+        """Запрашивает следующий свободный номер CRWO для выбранной организации."""
+        from sync import check_crwo_number
+        from kivy.clock import Clock
+        import threading
+
+        organization = self.ids.organization.text
+        region = self.ids.region_short.text
+
+        if not organization or not region:
+            return
+
+        # Очищаем поле, пока идёт запрос
+        self.ids.crwo_number.text = "..."
+
+        def _fetch():
+            # Отправляем 0, чтобы сервер вернул next_free
+            result = check_crwo_number(region, 0, organization)
+
+            if result.get("status") == "free" and "next_free" in result:
+                next_num = result["next_free"]
+            else:
+                next_num = 1
+
+            Clock.schedule_once(
+                lambda dt: setattr(self.ids.crwo_number, 'text', str(next_num)), 0
+            )
+
+        threading.Thread(target=_fetch, daemon=True).start()
 
     def _set_owner_from_auth(self):
         """Владелец заявки = текущий авторизованный пользователь."""
@@ -1672,6 +1707,9 @@ class UberWindow(MDScreen):
     def start(self):
         """Валидация + проверка номера CRWO на сервере."""
         import threading
+        # Очищаем поле генератора, если оно неактивно
+        if self.ids.generator_number_box.opacity == 0:
+            self.ids.generator_number.text = ""
 
         mode = self.ids.moto_spinner.text
         count, warn = 0, ""
@@ -1735,40 +1773,49 @@ class UberWindow(MDScreen):
         from sync import check_crwo_number
         from kivy.clock import Clock
 
-        print(f"[uber] _check_and_proceed({region}, {value})")
+        org_text = self.ids.organization.text
+        if org_text == "ПО ЮСТК":
+            organization = "ПО ЮСТК"
+        else:
+            organization = "Миранда-Медиа"
 
-        result = check_crwo_number(region, value)
+        print(f"[uber] _check_and_proceed({region}, {value}, {organization})")
+
+        result = check_crwo_number(region, value, organization)
         print(f"[uber] check result: {result}")
 
         if result["status"] == "free":
             Clock.schedule_once(
-                lambda dt: self._finalize_and_show(region, value, forced=False),
+                lambda dt: self._finalize_and_show(region, value, organization, forced=False),
                 0,
             )
         elif result["status"] == "taken":
             Clock.schedule_once(
-                lambda dt: self._show_taken_dialog(region, value, result),
+                lambda dt: self._show_taken_dialog(region, value, organization, result),
                 0,
             )
         else:  # offline
             Clock.schedule_once(
-                lambda dt: self._show_offline_and_proceed(region, value),
+                lambda dt: self._show_offline_and_proceed(region, value, organization),
                 0,
             )
 
-    def _finalize_and_show(self, region, value, forced):
+    def _finalize_and_show(self, region, value, organization, forced):
         """Сформировать заявку и перейти на CrwoWindow."""
+        from sync import commit_crwo_number
+        from kivymd.app import MDApp
 
-        print(f"[uber] finalize: region={region}, value={value}, forced={forced}")
+        print(f"[uber] finalize: region={region}, value={value}, "
+              f"organization={organization}, forced={forced}")
 
-        commit_crwo_number(region, value, forced=forced)
+        commit_crwo_number(region, value, organization, forced=forced)
 
         self.uber_make_output_sheet()
 
-        self._schedule_date_reset()  # ← запланировать сброс через 5 минут
+        # ── Таймер сброса даты ──
+        self._schedule_date_reset()
 
         MDApp.get_running_app().go_to("CrwoWindow")
-
     def _schedule_date_reset(self):
         """Сбросить arrival_date через 5 минут. Отменяет предыдущий таймер."""
         from kivy.clock import Clock
@@ -1789,8 +1836,8 @@ class UberWindow(MDScreen):
         self._date_reset_event = Clock.schedule_once(_reset, 300)
         print("[uber] таймер сброса даты установлен (5 минут)")
 
-    def _show_taken_dialog(self, region, value, result):
-        """Диалог: номер уже использован."""
+    def _show_taken_dialog(self, region, value, organization, result):
+        """Диалог: номер уже использован в этой организации."""
         from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
@@ -1810,7 +1857,7 @@ class UberWindow(MDScreen):
 
         msg = (
             f"Заявка с номером CRWO_{region}_{value:08d} "
-            f"уже выдавалась.\n\n"
+            f"уже выдавалась в «{organization}».\n\n"
             f"Кем: {used_by}\n"
             f"Когда: {used_at_str}\n\n"
             f"Что сделать?"
@@ -1819,7 +1866,7 @@ class UberWindow(MDScreen):
         content = BoxLayout(orientation="vertical", spacing=dp(10), padding=dp(12))
         content.add_widget(MDLabel(
             text=msg, halign="center",
-            size_hint_y=None, height=dp(140),
+            size_hint_y=None, height=dp(160),
             theme_text_color="Custom", text_color=(0, 0, 0, 1),
         ))
 
@@ -1831,19 +1878,19 @@ class UberWindow(MDScreen):
             title_color=(0.9, 0.3, 0.3, 1),
             title_size=dp(16),
             content=content,
-            size_hint=(0.9, 0.5),
+            size_hint=(0.9, 0.55),
             background="", background_color=(1, 1, 1, 1),
             auto_dismiss=False,
         )
 
         def _force(*_):
             popup.dismiss()
-            self._finalize_and_show(region, value, forced=True)
+            self._finalize_and_show(region, value, organization, forced=True)
 
         def _use_next(*_):
             popup.dismiss()
             self.ids.crwo_number.text = str(next_free)
-            self._finalize_and_show(region, next_free, forced=False)
+            self._finalize_and_show(region, next_free, organization, forced=False)
 
         def _cancel(*_):
             popup.dismiss()
@@ -1879,7 +1926,7 @@ class UberWindow(MDScreen):
 
         popup.open()
 
-    def _show_offline_and_proceed(self, region, value):
+    def _show_offline_and_proceed(self, region, value, organization):
         """Предупреждение offline, потом формирование без коммита."""
         from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
@@ -1912,7 +1959,7 @@ class UberWindow(MDScreen):
 
         def _ok(*_):
             popup.dismiss()
-            self._finalize_and_show(region, value, forced=True)
+            self._finalize_and_show(region, value, organization, forced=True)
 
         def _cancel(*_):
             popup.dismiss()
@@ -1971,6 +2018,12 @@ class UberWindow(MDScreen):
             work_desc = self.ids.work_description.text.strip()
         else:
             work_desc = spinner_val
+            # Формируем строку с номером генератора (только если поле заполнено и активно)
+            generator_info = ""
+            if self.ids.generator_number_box.opacity == 1:
+                gen_num = self.ids.generator_number.text.strip()
+                if gen_num:
+                    generator_info = f"\nНомер генератора: {gen_num}"
 
         now_dt = datetime.now()
         now = now_dt.strftime('%d.%m.%Y %H:%M')
@@ -2035,7 +2088,8 @@ class UberWindow(MDScreen):
                               f"Адрес: {self.RDB[bs]['address']}\n"
                               f"Координаты: {self.RDB[bs]['coordinates']}\n"
                               f"Тип работ: {self.ids.work_type.text}\n"
-                              f"Описание работ: {work_desc}\n"
+                              f"Описание работ: {work_desc}"
+                              f"{generator_info}\n"  # ← ДОБАВЛЕНО СЮДА
                               f"Дата/время выдачи задания: {now}\n"
                               f"Время прибытия: {arrive}\n"
                               f"Организация :{organization}\n"
@@ -2072,7 +2126,8 @@ class UberWindow(MDScreen):
                             checked_output = (f"{crwo_number} / {checked_bs}\n"
                                               #f"Номер ТТ: {self.ids.tt_number.text}\n"
                                               f"Тип работ: {self.ids.work_type.text}\n"
-                                              f"Описание работ: {work_desc}\n"
+                                              f"Описание работ: {work_desc}"
+                                              f"{generator_info}\n"  # ← ДОБАВЛЕНО СЮДА
                                               f"Дата/время выдачи задания: {now}\n"
                                               f"Время прибытия: {arrive}\n"
                                               f"Организация :{organization}\n"
@@ -2089,6 +2144,7 @@ class UberWindow(MDScreen):
                                       f"Координаты: {self.RDB[bs_current]['coordinates']}\n"
                                       f"Тип работ: {self.ids.work_type.text}\n"
                                       f"Описание работ: {work_desc}\n"
+                                      f"{generator_info}\n"  # ← ДОБАВЛЕНО СЮДА
                                       f"Дата/время выдачи задания: {now}\n"
                                       f"Время прибытия: {arrive}\n"
                                       f"Организация :{organization}\n"
@@ -3077,21 +3133,34 @@ class UberGoorandaApp(MDApp):
         def on_select(value):
             try:
                 uber = self.root.get_screen("Uber")
-                box = uber.ids.custom_desc_box
 
+                # 1. Всегда сначала сбрасываем ОБА поля в скрытое состояние
+                uber.ids.custom_desc_box.height = 0
+                uber.ids.custom_desc_box.opacity = 0
+                uber.ids.custom_desc_box.disabled = True
+                uber.ids.work_description.text = ""
+
+                uber.ids.generator_number_box.height = 0
+                uber.ids.generator_number_box.opacity = 0
+                uber.ids.generator_number_box.disabled = True
+                uber.ids.generator_number.text = ""
+
+                # 2. Теперь включаем только то, что нужно для выбранного варианта
                 if value == "Ввести свой вариант":
-                    box.height = dp(110)
-                    box.opacity = 1
-                    box.disabled = False
+                    uber.ids.custom_desc_box.height = dp(110)
+                    uber.ids.custom_desc_box.opacity = 1
+                    uber.ids.custom_desc_box.disabled = False
                     Clock.schedule_once(
                         lambda dt: setattr(uber.ids.work_description, "focus", True),
                         0.3,
                     )
-                else:
-                    box.height = 0
-                    box.opacity = 0
-                    box.disabled = True
-                    uber.ids.work_description.text = ""
+                elif "ДГУ" in value:
+                    # Показываем поле для номера генератора
+                    uber.ids.generator_number_box.height = dp(56)
+                    uber.ids.generator_number_box.opacity = 1
+                    uber.ids.generator_number_box.disabled = False
+                # Для остальных вариантов оба поля остаются скрытыми
+
             except Exception as e:
                 print(f"open_work_desc_menu error: {e}")
 

@@ -600,7 +600,7 @@
 
                     FixedDropDownItem:
                         id: work_description_spinner
-                        text: "🪫 Запитать БС от ДГУ"
+                        text: "⛽️Заправка генераторов Базовых Станций"
                         size_hint_x: 0.5
                         pos_hint: {"center_y": .5}
                         on_release: app.open_work_desc_menu(work_description_spinner)
@@ -634,6 +634,27 @@
                         height: "48dp"
                         pos_hint: {"center_y": .5}
                         on_release: root.clear_description()
+
+                # ── Поле «Номер генератора» (отдельная строка) ──
+                MDBoxLayout:
+                    id: generator_number_box
+                    orientation: "horizontal"
+                    size_hint_y: None
+                    height: 0
+                    opacity: 0
+                    disabled: True
+                    spacing: SPACE_SM
+
+                    MDTextField:
+                        id: generator_number
+                        hint_text: "Номер генератора"
+                        input_type: "text"
+                        mode: "rectangle"
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
+
+
 
                 # ── Время ──
                 # ── Дата и время прибытия ──
