@@ -2,7 +2,7 @@ name: Build KivyMD APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "serverization" ]
   workflow_dispatch:
 
 jobs:
