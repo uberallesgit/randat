@@ -892,23 +892,50 @@
             MyTab:
                 title: "GSM/DCS"
 
-                SelectableLabel:
-                    id: gsm
-                    text: ""
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+                    MDTextField:
+                        id: gsm
+                        text: ""
+                        input_type: "text"  # 👈 Добавь эту строку
+                        multiline: True
+
+#                SelectableLabel:
+#                    id: gsm
+#                    text: ""
 
             MyTab:
                 title: "UMTS"
 
-                SelectableLabel:
-                    id: umts
-                    text: ""
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+                    MDTextField:
+                        id: umts
+                        text: ""
+                        input_type: "text"  # 👈 Добавь эту строку
+                        multiline: True
+
+#                SelectableLabel:
+#                    id: umts
+#                    text: ""
 
             MyTab:
                 title: "LTE"
 
-                SelectableLabel:
-                    id: lte
-                    text: ""
+                ScrollView:
+                    do_scroll_x: False
+                    do_scroll_y: True
+                    MDTextField:
+                        id: lte
+                        text: ""
+                        input_type: "text"  # 👈 Добавь эту строку
+                        multiline: True
+
+#                SelectableLabel:
+#                    id: lte
+#                    text: ""
 
         MDBoxLayout:
             size_hint_y: None

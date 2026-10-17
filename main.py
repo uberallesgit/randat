@@ -1808,13 +1808,26 @@ class UberWindow(MDScreen):
         print(f"[uber] finalize: region={region}, value={value}, "
               f"organization={organization}, forced={forced}")
 
+        # 1. Коммитим номер (фоном)
         commit_crwo_number(region, value, organization, forced=forced)
 
+        # 2. Формируем текст заявки
         self.uber_make_output_sheet()
 
-        # ── Таймер сброса даты ──
+        # 3. Таймер сброса даты
         self._schedule_date_reset()
 
+        # 4. Очистка поля генератора
+        try:
+            self.ids.generator_number.text = ""
+        except Exception:
+            pass
+
+        # 5. Обновляем номер на следующий
+        # Важно: _update_crwo_number отправит запрос и получит следующий номер
+        self._update_crwo_number()
+
+        # 6. Переход на экран заявки
         MDApp.get_running_app().go_to("CrwoWindow")
     def _schedule_date_reset(self):
         """Сбросить arrival_date через 5 минут. Отменяет предыдущий таймер."""
@@ -1889,7 +1902,7 @@ class UberWindow(MDScreen):
 
         def _use_next(*_):
             popup.dismiss()
-            self.ids.crwo_number.text = str(next_free)
+            # self.ids.crwo_number.text = str(next_free)
             self._finalize_and_show(region, next_free, organization, forced=False)
 
         def _cancel(*_):
@@ -2072,92 +2085,108 @@ class UberWindow(MDScreen):
             fin_output = output
             checked_fin_out = output
 
+
         else:  # БС
-            bs = self.ids.bs_name.text
+            bs = self.ids.bs_name.text.strip().upper()
+            region = self.ids.region_short.text
             if len(bs.split()) == 1:
-                if bs not in self.RDB:
-                    if self.ids.region_short.text == "SEV":
+
+                # Если пользователь уже ввел префикс (CR или SE), используем его как есть
+                if bs.startswith(("CR", "SE")):
+                    target_bs = bs
+                else:
+                    # Пытаемся найти БС с префиксом текущего региона
+                    if region == "SEV":
                         p = (4 - len(bs)) * "0"
-                        bs = "SE" + p + bs
+                        target_bs = "SE" + p + bs
                     else:
                         p = (4 - len(bs)) * "0"
-                        bs = "CR" + p + bs
-                if bs in self.RDB:
-                    output = (f"{crwo_number} / {bs}\n"
-                              # f"Номер ТТ: {self.ids.tt_number.text}\n"
-                              f"Адрес: {self.RDB[bs]['address']}\n"
-                              f"Координаты: {self.RDB[bs]['coordinates']}\n"
+                        target_bs = "CR" + p + bs
+                    # Если не нашли — пробуем другой префикс (умный поиск)
+                    if target_bs not in self.RDB:
+                        if region == "SEV":
+                            p = (4 - len(bs)) * "0"
+                            target_bs = "CR" + p + bs
+                        else:
+                            p = (4 - len(bs)) * "0"
+                            target_bs = "SE" + p + bs
+                if target_bs in self.RDB:
+                    output = (f"{crwo_number} / {target_bs}\n"
+                              f"Адрес: {self.RDB[target_bs]['address']}\n"
+                              f"Координаты: {self.RDB[target_bs]['coordinates']}\n"
                               f"Тип работ: {self.ids.work_type.text}\n"
                               f"Описание работ: {work_desc}"
-                              f"{generator_info}\n"  # ← ДОБАВЛЕНО СЮДА
+                              f"{generator_info}\n"
                               f"Дата/время выдачи задания: {now}\n"
                               f"Время прибытия: {arrive}\n"
                               f"Организация :{organization}\n"
                               f"Ответственный ММ : {responsibles}\n"
                               f"ЗО : {ZO}")
-                    # Переносим результат в финальные переменные
                     fin_output = output
                     checked_fin_out = output
                 else:
                     self.show_dialog("НЕТ ТАКОЙ БС")
                     return
 
+
             else:  # Если ввели несколько БС через пробел
+
                 bs_names = []
                 checked_output = ""
                 crwo_delta = 0
-
                 for b in bs.split():
-                    bs_current = b  # Используем новую переменную, чтобы не портить исходный список bs
-                    if bs_current not in self.RDB:
-                        if self.ids.region_short.text == "SEV":
-                            p = (4 - len(bs_current)) * "0"
-                            bs_current = "SE" + p + bs_current
+                    b = b.strip().upper()
+                    region = self.ids.region_short.text
+                    # Умный поиск префикса
+                    if b.startswith(("CR", "SE")):
+                        bs_current = b
+                    else:
+                        if region == "SEV":
+                            p = (4 - len(b)) * "0"
+                            bs_current = "SE" + p + b
                         else:
-                            p = (4 - len(bs_current)) * "0"
-                            bs_current = "CR" + p + bs_current
-
-                    # ВАЖНО: проверка существования БС перенесена на один уровень назад (к if/else)
+                            p = (4 - len(b)) * "0"
+                            bs_current = "CR" + p + b
+                        # Если не нашли — пробуем другой
+                        if bs_current not in self.RDB:
+                            if region == "SEV":
+                                p = (4 - len(b)) * "0"
+                                bs_current = "CR" + p + b
+                            else:
+                                p = (4 - len(b)) * "0"
+                                bs_current = "SE" + p + b
                     if bs_current in self.RDB:
                         if self.ids.single_request_checkbox.active:
-
                             bs_names.append(bs_current)
                             checked_bs = ', '.join(bs_names)
                             checked_output = (f"{crwo_number} / {checked_bs}\n"
-                                              #f"Номер ТТ: {self.ids.tt_number.text}\n"
                                               f"Тип работ: {self.ids.work_type.text}\n"
                                               f"Описание работ: {work_desc}"
-                                              f"{generator_info}\n"  # ← ДОБАВЛЕНО СЮДА
+                                              f"{generator_info}\n"
                                               f"Дата/время выдачи задания: {now}\n"
                                               f"Время прибытия: {arrive}\n"
                                               f"Организация :{organization}\n"
                                               f"Ответственный ММ : {responsibles}\n"
                                               f"ЗО : {ZO}")
-                            crwo_delta +=1
-
+                            crwo_delta += 1
                         else:
-
-                            crwo_number = f"CRWO_{self.ids.region_short.text}_{prefix}{str(int(crwo_num) + crwo_delta)}"
+                            crwo_number = f"CRWO_{region}_{prefix}{str(int(crwo_num) + crwo_delta)}"
                             output = (f"{crwo_number} / {bs_current}\n"
-                                      #f"Номер ТТ: {self.ids.tt_number.text}\n"
                                       f"Адрес: {self.RDB[bs_current]['address']}\n"
                                       f"Координаты: {self.RDB[bs_current]['coordinates']}\n"
                                       f"Тип работ: {self.ids.work_type.text}\n"
-                                      f"Описание работ: {work_desc}\n"
-                                      f"{generator_info}\n"  # ← ДОБАВЛЕНО СЮДА
+                                      f"Описание работ: {work_desc}"
+                                      f"{generator_info}\n"
                                       f"Дата/время выдачи задания: {now}\n"
                                       f"Время прибытия: {arrive}\n"
                                       f"Организация :{organization}\n"
                                       f"Ответственный ММ : {responsibles}\n"
                                       f"ЗО : {ZO}")
                             crwo_delta += 1
-
                             if fin_output:
                                 fin_output += "\n\n" + output
                             else:
                                 fin_output = output
-
-                # После завершения цикла форматируем результат
                 checked_fin_out = checked_output
 
         # 2. ВЫВОД РЕЗУЛЬТАТА НА ЭКРАН КИВИ

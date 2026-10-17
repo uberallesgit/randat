@@ -66,24 +66,25 @@ def check_crwo_number(region, value, organization="Миранда-Медиа"):
 
 def commit_crwo_number(region, value, organization="Миранда-Медиа", forced=False):
     """
-    Зафиксировать номер на сервере в рамках организации. Фоном.
+    Зафиксировать номер на сервере. Возвращает True, если успешно.
+    (Выполняется синхронно, чтобы можно было дождаться результата).
     """
-    def _push():
-        try:
-            resp = api.post("/crwo/commit", json={
-                "region": region,
-                "value": int(value),
-                "organization": organization,
-                "device_id": get_device_id(),
-                "forced": bool(forced),
-            }, timeout=10)
+    try:
+        resp = api.post("/crwo/commit", json={
+            "region": region,
+            "value": int(value),
+            "organization": organization,
+            "device_id": get_device_id(),
+            "forced": bool(forced),
+        }, timeout=10)
 
-            if resp.status_code == 200:
-                print(f"[crwo] committed {organization}/{region}-{value} forced={forced}")
-            else:
-                print(f"[crwo] commit HTTP {resp.status_code}: {resp.text}")
+        if resp.status_code == 200:
+            print(f"[crwo] committed {organization}/{region}-{value} forced={forced}")
+            return True
+        else:
+            print(f"[crwo] commit HTTP {resp.status_code}: {resp.text}")
+            return False
 
-        except Exception as e:
-            print(f"[crwo] commit exception: {e}")
-
-    threading.Thread(target=_push, daemon=True).start()
+    except Exception as e:
+        print(f"[crwo] commit exception: {e}")
+        return False
