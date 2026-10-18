@@ -146,6 +146,7 @@ class ApiClient:
             "last_name": last_name,
             "password": password,
         })
+
         if r.status_code == 200:
             data = r.json()
             self.save_token(
@@ -153,10 +154,22 @@ class ApiClient:
                 user_id=data.get("user_id"),
                 role=data.get("role"),
                 first_name=data.get("first_name"),
-                last_name=data.get("last_name"),  # ← ДОБАВЛЕНО
+                last_name=data.get("last_name"),
             )
+            self.last_error = None
             return data
-        return None
+        elif r.status_code == 403:
+            # Сервер вернул 403 (забанен или не одобрен)
+            try:
+                detail = r.json().get("detail", "Доступ запрещён")
+            except Exception:
+                detail = "Доступ запрещён"
+            self.last_error = f"403: {detail}"
+            return None
+        else:
+            # Неверный пароль (401) или другая ошибка
+            self.last_error = "auth_failed"
+            return None
 
     def register(self, first_name, last_name, password):
         """

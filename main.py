@@ -187,13 +187,25 @@ class LoginWindow(MDScreen):
             self.set_error("Заполните имя, фамилию и пароль")
             return
 
-        # Индикация "идёт запрос"
         self.set_error("Проверка…")
 
         data = api.login(first_name, last_name, password)
 
         if data is None:
-            # Сервер недоступен — пробуем локальный fallback
+            # Проверяем, что вернул сервер
+            err = getattr(api, 'last_error', None)
+
+            if err and err.startswith("403:"):
+                # Сервер сказал: забанен или не одобрен
+                detail = err.split(":", 1)[1].strip()
+                self.set_error(detail)
+                return
+
+            if err == "auth_failed":
+                self.set_error("Неверное имя, фамилия или пароль")
+                return
+
+            # Если сервер недоступен (offline) — пробуем локальный fallback
             try:
                 if db.verify_user(first_name, last_name, password):
                     self.set_error("")
@@ -203,10 +215,10 @@ class LoginWindow(MDScreen):
             except Exception as e:
                 print(f"[login] fallback error: {e}")
 
-            self.set_error("Неверное имя, фамилия или пароль (или нет сети)")
+            self.set_error("Нет сети. Попробуйте позже.")
             return
 
-        # Успех — токен уже сохранён внутри api.login
+        # Успех
         print(f"[login] OK: {data['first_name']} (role={data['role']})")
         self.set_error("")
         self.ids.password.text = ""
