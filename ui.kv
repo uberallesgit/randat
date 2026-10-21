@@ -190,6 +190,8 @@
             left_action_3: lambda: app.go_to("BirthdayWindow")
             right_icon: "swap-horizontal"
             right_action: lambda: app.go_to("Uber")
+            right_icon_2: "chart-box"
+            right_action_2: lambda: app.go_to("BlitzReport") # ← НОВОЕ
 
         MDBoxLayout:
             orientation: "vertical"
@@ -1133,3 +1135,205 @@
 
             Widget:
                 # нижний растягивающийся отступ
+
+# ────────────────────────────────────────────────────────────────
+# BLITZ REPORT — ежедневная сводка ЦТЭиСО
+# ────────────────────────────────────────────────────────────────
+<BlitzReportWindow>:
+    name: "BlitzReport"
+
+    MDBoxLayout:
+        orientation: "vertical"
+        md_background_color: COLOR_BG
+
+        ScreenHeader:
+            title: "BlitzReport"
+            left_icon: "arrow-left"
+            left_action: lambda: app.go_back("Gooranda")
+
+        MDScrollView:
+            do_scroll_x: False
+            do_scroll_y: True
+
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: SPACE_MD
+                spacing: SPACE_SM
+                size_hint_y: None
+                height: self.minimum_height
+
+                # ── Файл 1: site_not_air ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: SIZE_ROW
+                    spacing: SPACE_SM
+
+                    MDTextField:
+                        id: blitz_om_path
+                        hint_text: "Путь к site_not_air_*.xlsx"
+                        input_type: "text"
+                        mode: "rectangle"
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
+
+                    RoundedButton:
+                        text: "…"
+                        size_hint_x: None
+                        width: "60dp"
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
+                        on_release: root.pick_om_file()
+
+                # ── Файл 2: Список аварий ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: SIZE_ROW
+                    spacing: SPACE_SM
+
+                    MDTextField:
+                        id: blitz_alarms_path
+                        hint_text: "Путь к «Список аварий*.xlsx»"
+                        input_type: "text"
+                        mode: "rectangle"
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
+
+                    RoundedButton:
+                        text: "…"
+                        size_hint_x: None
+                        width: "60dp"
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
+                        on_release: root.pick_alarms_file()
+
+                # ── СЦ ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: SIZE_ROW
+                    spacing: SPACE_SM
+
+                    MDLabel:
+                        text: "СЦ:"
+                        size_hint_x: None
+                        width: "60dp"
+                        theme_text_color: "Custom"
+                        text_color: COLOR_DARK
+                        valign: "middle"
+                        pos_hint: {"center_y": .5}
+
+                    FixedDropDownItem:
+                        id: blitz_sc
+                        text: "Сервисный Центр Феодосия"
+                        pos_hint: {"center_y": .5}
+                        on_release: app.open_blitz_sc_menu(blitz_sc)
+
+                                # ── Константы: заголовок ──
+                MDLabel:
+                    text: "Константы неэфира (БС → причина):"
+                    theme_text_color: "Custom"
+                    text_color: COLOR_DARK
+                    size_hint_y: None
+                    height: "24dp"
+
+                # ── Строка добавления: [БС] [Причина] [ДОБАВИТЬ] ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: "56dp"
+                    spacing: SPACE_SM
+
+                    MDTextField:
+                        id: blitz_new_bts
+                        hint_text: "Номер БС"
+                        input_type: "text"
+                        mode: "rectangle"
+                        size_hint_x: 0.28
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
+
+                    MDTextField:
+                        id: blitz_new_reason
+                        hint_text: "Причина неэфира"
+                        input_type: "text"
+                        mode: "rectangle"
+                        size_hint_x: 0.52
+                        size_hint_y: None
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
+                        on_text_validate: root.add_constant()
+
+                    RoundedButton:
+                        text: "+ ДОБАВИТЬ"
+                        size_hint_x: 0.20
+                        height: "48dp"
+                        pos_hint: {"center_y": .5}
+                        background_color: COLOR_PRIMARY
+                        color: COLOR_ON_DARK
+                        on_release: root.add_constant()
+
+                # ── Список добавленных (скроллится) ──
+                MDBoxLayout:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: "160dp"
+                    md_background_color: COLOR_SURFACE
+                    padding: SPACE_XS
+
+                    ScrollView:
+                        do_scroll_x: False
+                        do_scroll_y: True
+
+                        MDBoxLayout:
+                            id: blitz_constants_list
+                            orientation: "vertical"
+                            size_hint_y: None
+                            height: self.minimum_height
+                            spacing: "2dp"
+
+                # ── Кнопка формирования ──
+                RoundedButton:
+                    text: "СФОРМИРОВАТЬ ОТЧЁТ"
+                    background_color: COLOR_PRIMARY
+                    color: COLOR_ON_DARK
+                    on_release: root.generate()
+
+                # ── Результат ──
+                MDBoxLayout:
+                    orientation: "vertical"
+                    padding: SPACE_SM
+                    size_hint_y: None
+                    height: "360dp"
+                    md_background_color: COLOR_SURFACE
+
+                    text_color: COLOR_DARK
+                    size_hint_y: None
+
+                    ScrollView:
+                        do_scroll_x: False
+                        do_scroll_y: True
+
+                        MDTextField:
+                            id: blitz_text_output
+                            input_type: "text"
+                            multiline: True
+
+                # ── Нижние кнопки ──
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: SIZE_BUTTON
+                    spacing: SPACE_SM
+
+                    RoundedButton:
+                        text: "КОПИРОВАТЬ"
+                        disabled: blitz_text_output.text == ""
+                        on_release: root.copy_to_clipboard(blitz_text_output.text)
+
+                    RoundedButton:
+                        text: "🧹 ОЧИСТИТЬ"
+                        background_color: COLOR_DANGER
+                        color: COLOR_ON_DARK
+                        on_release: root.clear_report()
+
+

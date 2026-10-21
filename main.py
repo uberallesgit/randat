@@ -1,6 +1,7 @@
 import os
 import sys
 from api_client import api
+from kivymd.uix.button import MDIconButton
 import db   #<--------------
 import rdb
 import csv
@@ -53,6 +54,10 @@ from kivy.core.text import LabelBase
 from datetime import date
 from sync import commit_crwo_number
 from kivymd.app import MDApp
+import re
+import json
+import traceback
+from pathlib import Path
 
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
@@ -159,7 +164,7 @@ class CheckboxItem(OneLineAvatarIconListItem):
 # Куда переходить после успешного входа — поменяйте под свой ScreenManager.
 HOME_SCREEN_NAME = "Uber"
 
-MIN_PASSWORD_LENGTH = 6
+MIN_PASSWORD_LENGTH = 8
 
 
 class LoginWindow(MDScreen):
@@ -2889,6 +2894,692 @@ class BirthdayWindow(MDScreen):
         con.commit()
         con.close()
 
+# ────────────────────────────────────────────────────────────────
+# BLITZ REPORT — ежедневная сводка ЦТЭиСО
+# ────────────────────────────────────────────────────────────────
+import re
+import json
+import traceback
+from pathlib import Path
+
+BLITZ_PRIORITY_ORDER = ["P0", "P1", "P2", "P3", "НП"]
+BLITZ_CONFIG_FILE = "blitz_config.json"
+
+BLITZ_DEFAULT_CONSTANTS = {
+    "CR1709": "недоступна в связи с прилётом БПЛА",
+    "CR0336": "неисправное ТП (БС ушла из статистики)",
+}
+
+
+def _blitz_config_path():
+    return service_path(BLITZ_CONFIG_FILE)
+
+
+BLITZ_DEFAULT_CONSTANTS = {
+    "CR1709": "недоступна в связи с прилётом БПЛА",
+    "CR0336": "неисправное ТП (БС ушла из статистики)",
+}
+
+
+def blitz_load_user_constants():
+    """Пользовательские константы (без базовых). Возвращает dict."""
+    p = _blitz_config_path()
+    if os.path.exists(p):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    # отфильтровываем базовые — они всегда добавляются на лету
+                    return {k: v for k, v in data.items()
+                            if k not in BLITZ_DEFAULT_CONSTANTS}
+        except Exception as e:
+            print(f"[blitz] load_user_constants: {e}")
+    return {}
+
+
+def blitz_save_user_constants(constants):
+    """Сохраняет только пользовательские константы."""
+    try:
+        with open(_blitz_config_path(), "w", encoding="utf-8") as f:
+            json.dump(constants, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"[blitz] save_user_constants: {e}")
+
+
+def blitz_effective_constants():
+    """Базовые + пользовательские (пользователь может переопределить базовые)."""
+    merged = BLITZ_DEFAULT_CONSTANTS.copy()
+    merged.update(blitz_load_user_constants())
+    return merged
+
+
+def blitz_parse_priority(val):
+    if val is None:
+        return "НП"
+    s = str(val).strip()
+    if not s:
+        return "НП"
+    m = re.search(r"приоритет\s*(\d)", s, re.IGNORECASE)
+    return f"P{m.group(1)}" if m else "НП"
+
+
+def blitz_format_duration(delta):
+    total = int(delta.total_seconds())
+    if total < 0:
+        total = 0
+    days = total // 86400
+    hours = (total % 86400) // 3600
+    minutes = (total % 3600) // 60
+    if days >= 1:
+        return f"{days} сут {hours} ч"
+    if hours >= 1:
+        return f"{hours} ч {minutes} мин"
+    return f"{minutes} мин"
+
+
+def blitz_parse_file_dt(path):
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})_(\d{2})_(\d{2})_(\d{2})", Path(path).name)
+    return datetime(*map(int, m.groups())) if m else datetime.now()
+
+
+def blitz_to_dt(val):
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                return datetime.strptime(val, fmt)
+            except ValueError:
+                pass
+    return None
+
+
+def blitz_label(prio):
+    if prio in ("P0", "P1"):
+        return f"**{prio}:**"
+    if prio == "P2":
+        return f"*{prio}:*"
+    return f"{prio}:"
+
+
+def blitz_label_n(prio, n):
+    if prio in ("P0", "P1"):
+        return f"**{prio} ({n} БС):**"
+    if prio == "P2":
+        return f"*{prio} ({n} БС):*"
+    return f"{prio} ({n} БС):"
+
+
+def _blitz_load_sheet(path, sheet_name):
+    wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    try:
+        if sheet_name not in wb.sheetnames:
+            return []
+        ws = wb[sheet_name]
+        return [r for r in ws.iter_rows(min_row=2, values_only=True) if r and r[0]]
+    finally:
+        wb.close()
+
+
+def blitz_read_om(path):
+    return [
+        {"alarm": r[0], "occurrence": r[1], "bts": r[2],
+         "sc": r[4], "diesel_priority": r[7] if len(r) > 7 else None}
+        for r in _blitz_load_sheet(path, "OM")
+    ]
+
+
+def blitz_read_diesel(path):
+    return [
+        {"bts": r[0], "alarm": r[1], "occurrence": r[2],
+         "sc": r[4] if len(r) > 4 else None}
+        for r in _blitz_load_sheet(path, "Diesel On")
+    ]
+
+
+def blitz_read_alarms(path):
+    return [
+        {"bts": r[0], "sc": r[1], "alarm": r[3],
+         "priority": r[5] if len(r) > 5 else None}
+        for r in _blitz_load_sheet(path, "Sheet")
+    ]
+
+
+def blitz_get_unique_scs(om_path):
+    try:
+        om = blitz_read_om(om_path)
+        scs = sorted({r["sc"] for r in om if r["sc"]})
+        return scs if scs else ["Сервисный Центр Феодосия"]
+    except Exception:
+        return ["Сервисный Центр Феодосия"]
+
+
+def _blitz_build_ne(om, sc_name, get_prio, constants):
+    result, seen = [], set()
+    for r in om:
+        if r["alarm"] != "NE Is Disconnected" or r["sc"] != sc_name:
+            continue
+        bts = r["bts"]
+        if bts in seen:
+            continue
+        seen.add(bts)
+        result.append({"bts": bts, "priority": get_prio(bts),
+                       "reason": "причина не указана"})
+
+    for bts, reason in constants.items():
+        if bts in seen:
+            for x in result:
+                if x["bts"] == bts:
+                    x["reason"] = reason
+        else:
+            result.append({"bts": bts, "priority": get_prio(bts), "reason": reason})
+            seen.add(bts)
+    return result
+
+
+def _blitz_build_gen(diesel, sc_name, get_prio, file_dt):
+    result, seen = [], set()
+    for r in diesel:
+        if r["sc"] != sc_name:
+            continue
+        bts = r["bts"]
+        if bts in seen:
+            continue
+        seen.add(bts)
+        occ = blitz_to_dt(r["occurrence"])
+        dur = blitz_format_duration(file_dt - occ) if occ else "—"
+        result.append({"bts": bts, "priority": get_prio(bts), "duration": dur})
+    return result
+
+
+def _blitz_build_akb(alarms, sc_name, get_prio, gen_names):
+    result, seen = [], set()
+    for r in alarms:
+        if r["alarm"] != "MAINS FAILURE" or r["sc"] != sc_name:
+            continue
+        bts = r["bts"]
+        if bts in seen or bts in gen_names:
+            continue
+        seen.add(bts)
+        result.append({"bts": bts, "priority": get_prio(bts)})
+    return result
+
+
+def _blitz_group(items):
+    by_p = {}
+    for it in items:
+        by_p.setdefault(it["priority"], []).append(it)
+    return by_p
+
+
+def _blitz_format_ne(items):
+    lines, by_p = [], _blitz_group(items)
+    for p in BLITZ_PRIORITY_ORDER:
+        if p not in by_p:
+            continue
+        for it in by_p[p]:
+            lines.append(f"- {blitz_label(p)} {it['bts']} — {it['reason']}")
+    return "\n".join(lines)
+
+
+def _blitz_format_akb(items):
+    lines, by_p = [], _blitz_group(items)
+    for p in BLITZ_PRIORITY_ORDER:
+        if p not in by_p:
+            continue
+        group = by_p[p]
+        if len(group) == 1:
+            lines.append(f"- {blitz_label(p)} {group[0]['bts']}")
+        else:
+            lines.append(
+                f"- {blitz_label_n(p, len(group))} "
+                f"{', '.join(it['bts'] for it in group)}"
+            )
+    return "\n".join(lines)
+
+
+def _blitz_format_gen(items):
+    lines, by_p = [], _blitz_group(items)
+    for p in BLITZ_PRIORITY_ORDER:
+        if p not in by_p:
+            continue
+        group = by_p[p]
+        if len(group) == 1:
+            lines.append(f"- {blitz_label(p)} {group[0]['bts']} — {group[0]['duration']}")
+        else:
+            joined = "; ".join(f"{it['bts']} — {it['duration']}" for it in group)
+            lines.append(f"- {blitz_label_n(p, len(group))} {joined}")
+    return "\n".join(lines)
+
+
+def blitz_build_report(om_path, alarms_path, sc_name, constants):
+    om = blitz_read_om(om_path)
+    diesel = blitz_read_diesel(om_path)
+    alarms = blitz_read_alarms(alarms_path)
+    file_dt = blitz_parse_file_dt(om_path)
+
+    om_prio = {r["bts"]: blitz_parse_priority(r["diesel_priority"])
+               for r in om if r["diesel_priority"]}
+    alm_prio = {r["bts"]: blitz_parse_priority(r["priority"])
+                for r in alarms if r["sc"] == sc_name and r["priority"]}
+
+    def get_prio(bts):
+        return om_prio.get(bts) or alm_prio.get(bts) or "НП"
+
+    ne = _blitz_build_ne(om, sc_name, get_prio, constants)
+    gen = _blitz_build_gen(diesel, sc_name, get_prio, file_dt)
+    akb = _blitz_build_akb(alarms, sc_name, get_prio, {g["bts"] for g in gen})
+
+    now = datetime.now()
+    short_sc = sc_name.replace("Сервисный Центр ", "")
+    out = [
+        f"📡 ЦТЭиСО {short_sc} — сводка", "",
+        f"📅 Дата формирования: {now.strftime('%d.%m.%Y')}",
+        f"🕐 Время формирования: {now.strftime('%H:%M')}", "", "---", "",
+        f"## 🔴 NE DISCONNECTED ({len(ne)} БС)", "",
+        _blitz_format_ne(ne) if ne else "0 БС", "",
+        f"## 🔋 На АКБ: {len(akb)} БС", "",
+        _blitz_format_akb(akb) if akb else "0 БС", "",
+        f"## ⚡ На Генерации: {len(gen)} БС", "",
+        _blitz_format_gen(gen) if gen else "0 БС",
+    ]
+    return "\n".join(out)
+def _blitz_search_dirs():
+    """Папки, где ищем файлы (Android и Desktop)."""
+    candidates = []
+    if IS_ANDROID:
+        try:
+            candidates.append(MDApp.get_running_app().user_data_dir)
+        except Exception:
+            pass
+        candidates.append("/storage/emulated/0/Download")
+        candidates.append("/storage/emulated/0/Documents")
+        candidates.append("/storage/emulated/0")
+    else:
+        up = os.environ.get("USERPROFILE")
+        if up:
+            candidates.append(os.path.join(up, "Downloads"))
+        home = os.path.expanduser("~")
+        candidates.append(os.path.join(home, "Downloads"))
+        candidates.append(os.path.join(home, "Загрузки"))
+        candidates.append(home)
+
+    valid = [d for d in candidates if os.path.isdir(d)]
+    # убираем дубликаты, сохраняя порядок
+    seen, out = set(), []
+    for d in valid:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out if out else ["/"]
+
+def open_file_chooser_search(on_select, prefix_filter=None, title="Выберите файл"):
+    """Popup с живым поиском по имени файла.
+
+    :param on_select: callable(path) — вызывается при выборе файла
+    :param prefix_filter: callable(filename) -> bool — доп. фильтр по имени
+    :param title: заголовок Popup
+    """
+    search_dirs = _blitz_search_dirs()
+
+    # ── Поле поиска ──
+    search_box = MDBoxLayout(
+        orientation="horizontal",
+        size_hint_y=None,
+        height=dp(48),
+        spacing=dp(8),
+        padding=[dp(4), 0, dp(4), 0],
+    )
+    search_field = TextInput(
+        hint_text="Введите часть имени файла…",
+        multiline=False,
+        input_type="text",
+        size_hint_y=None,
+        height=dp(44),
+        background_color=(0.95, 0.95, 0.97, 1),
+        foreground_color=TEXT_COLOR,
+        cursor_color=(0.42, 0.16, 0.85, 1),
+        font_size=dp(15),
+        padding=[dp(10), dp(10), dp(10), dp(10)],
+    )
+    search_box.add_widget(search_field)
+
+    # ── Список файлов ──
+    list_layout = BoxLayout(
+        orientation="vertical",
+        size_hint_y=None,
+        spacing=dp(2),
+        padding=[dp(4)] * 4,
+    )
+    list_layout.bind(minimum_height=list_layout.setter("height"))
+
+    list_scroll = ScrollView(do_scroll_x=False, do_scroll_y=True)
+    list_scroll.add_widget(list_layout)
+
+    # ── Нижние кнопки ──
+    buttons = BoxLayout(
+        orientation="horizontal",
+        size_hint_y=None,
+        height=dp(48),
+        spacing=dp(8),
+        padding=[dp(8), 0, dp(8), 0],
+    )
+
+    popup = Popup(
+        title=title,
+        title_color=TEXT_COLOR,
+        title_size=dp(16),
+        separator_color=(0.85, 0.85, 0.85, 1),
+        size_hint=(0.95, 0.9),
+        background="",
+        background_color=(1, 1, 1, 1),
+        auto_dismiss=True,
+    )
+
+    def _choose_file(full_path):
+        popup.dismiss()
+        # откладываем вызов, чтобы Popup успел закрыться (MIUI!)
+        Clock.schedule_once(lambda dt: on_select(full_path), 0.15)
+
+    def _rebuild_list(search_text=""):
+        list_layout.clear_widgets()
+
+        st = search_text.lower().strip()
+        found = []
+
+        for d in search_dirs:
+            try:
+                for fname in os.listdir(d):
+                    full = os.path.join(d, fname)
+                    if not os.path.isfile(full):
+                        continue
+                    # применяем внешний фильтр (например, «site_not_air»)
+                    if prefix_filter and not prefix_filter(fname):
+                        continue
+                    # применяем живой поиск
+                    if st and st not in fname.lower():
+                        continue
+                    found.append((fname, full))
+            except Exception:
+                continue
+
+        # убираем дубли по полному пути, сортируем по дате изменения (новые сверху)
+        uniq = {}
+        for fname, full in found:
+            uniq[full] = fname
+        items = []
+        for full, fname in uniq.items():
+            try:
+                mtime = os.path.getmtime(full)
+            except Exception:
+                mtime = 0
+            items.append((mtime, fname, full))
+        items.sort(key=lambda x: x[0], reverse=True)
+
+        if not items:
+            list_layout.add_widget(Label(
+                text="Файлы не найдены",
+                color=TEXT_COLOR,
+                size_hint_y=None,
+                height=dp(40),
+            ))
+            return
+
+        for _, fname, full in items:
+            btn = Button(
+                text=fname,
+                size_hint_y=None,
+                height=dp(52),
+                background_normal="",
+                background_down="",
+                background_color=(0.95, 0.95, 0.97, 1),
+                color=TEXT_COLOR,
+                font_size=dp(14),
+                halign="left",
+                valign="middle",
+            )
+            # перенос длинных имён
+            btn.bind(
+                width=lambda inst, w: setattr(inst, "text_size", (w - dp(16), None)),
+            )
+            btn.bind(on_release=lambda x, p=full: _choose_file(p))
+            list_layout.add_widget(btn)
+
+    def _cancel(*_):
+        popup.dismiss()
+
+    btn_cancel = Button(
+        text="ОТМЕНА",
+        background_normal="",
+        background_color=(0.9, 0.3, 0.3, 1),
+        color=(1, 1, 1, 1),
+        bold=True,
+    )
+    btn_cancel.bind(on_release=_cancel)
+    buttons.add_widget(btn_cancel)
+
+    # ── Сборка контента ──
+    content = BoxLayout(orientation="vertical", spacing=dp(4), padding=dp(4))
+    content.add_widget(search_box)
+    content.add_widget(list_scroll)
+    content.add_widget(buttons)
+
+    popup.content = content
+
+    # ── События ──
+    search_field.bind(text=lambda inst, val: _rebuild_list(val))
+
+    # Строим список после открытия (чтобы размеры виджетов были готовы)
+    Clock.schedule_once(lambda dt: _rebuild_list(""), 0.1)
+
+    popup.open()
+    return popup
+
+
+# ────────────────────────────────────────────────────────────────
+# BLITZ REPORT — экран
+# ────────────────────────────────────────────────────────────────
+class BlitzReportWindow(MDScreen):
+    """Экран быстрой сводки ЦТЭиСО."""
+
+    def __init__(self, **kw):
+        self.user_constants = blitz_load_user_constants()
+        super().__init__(**kw)
+
+    def on_kv_post(self, *_):
+        try:
+            self.ids.blitz_sc.values = (
+                "Сервисный Центр Феодосия",
+                "Сервисный Центр Симферополь",
+            )
+        except Exception:
+            pass
+        Clock.schedule_once(lambda dt: self._refresh_constants_list(), 0.1)
+
+    def on_pre_enter(self, *args):
+        try:
+            UberWindow.RDB = rdb.load_rdb()
+        except Exception:
+            pass
+
+    def on_pre_leave(self, *args):
+        clear_all_selections(self)
+
+    # ── Работа с константами ──
+    def _refresh_constants_list(self):
+        try:
+            container = self.ids.blitz_constants_list
+        except Exception:
+            return
+
+        container.clear_widgets()
+
+        constants = getattr(self, "user_constants", None) or {}
+
+        if not constants:
+            container.add_widget(MDLabel(
+                text="Пользовательских констант нет. Добавьте БС ниже.",
+                theme_text_color="Custom",
+                text_color=(0.5, 0.5, 0.5, 1),
+                font_size="13sp",
+                size_hint_y=None,
+                height="32dp",
+                halign="center",
+            ))
+            return
+
+        for bts, reason in sorted(constants.items()):
+            row = MDBoxLayout(
+                orientation="horizontal",
+                size_hint_y=None,
+                height="44dp",
+                spacing="6dp",
+                padding=["8dp", 0, "4dp", 0],
+            )
+
+            text = MDLabel(
+                text=f"{bts} — {reason}",
+                theme_text_color="Custom",
+                text_color=TEXT_COLOR,
+                font_size="13sp",
+                valign="middle",
+                shorten=True,
+                shorten_from="right",
+            )
+            row.add_widget(text)
+
+            del_btn = MDIconButton(
+                icon="delete",
+                theme_text_color="Custom",
+                text_color=(0.85, 0.2, 0.2, 1),
+                size_hint=(None, None),
+                size=("36dp", "36dp"),
+                pos_hint={"center_y": .5},
+            )
+            del_btn.bind(
+                on_release=lambda x, b=bts: self.delete_constant(b)
+            )
+            row.add_widget(del_btn)
+
+            container.add_widget(row)
+
+    def add_constant(self):
+        """Читает два поля, добавляет пару БС → причина в словарь."""
+        try:
+            bts = self.ids.blitz_new_bts.text.strip().upper()
+            reason = self.ids.blitz_new_reason.text.strip()
+        except Exception as e:
+            print(f"[blitz] add_constant read: {e}")
+            return
+
+        if not bts or not reason:
+            show_simple_dialog(
+                "Внимание",
+                "Заполните номер БС и причину неэфира.",
+            )
+            return
+
+        # Пользователь может переопределить базовую — предупреждаем
+        if bts in BLITZ_DEFAULT_CONSTANTS:
+            show_simple_dialog(
+                "Внимание",
+                f"БС {bts} уже есть в базовых константах. "
+                f"Если сохранить — ваша причина заменит базовую.",
+            )
+
+        self.user_constants[bts] = reason
+        blitz_save_user_constants(self.user_constants)
+
+        # очищаем поля
+        self.ids.blitz_new_bts.text = ""
+        self.ids.blitz_new_reason.text = ""
+
+        self._refresh_constants_list()
+
+    def delete_constant(self, bts):
+        """Удаляет пользовательскую константу."""
+        if bts in self.user_constants:
+            del self.user_constants[bts]
+            blitz_save_user_constants(self.user_constants)
+            self._refresh_constants_list()
+
+    # ── Выбор файла: site_not_air ──
+    def pick_om_file(self):
+        def is_om(fname):
+            n = fname.lower()
+            return (
+                n.endswith((".xlsx", ".xls"))
+                and ("site_not_air" in n or "not_air" in n)
+            )
+
+        def on_select(path):
+            try:
+                self.ids.blitz_om_path.text = path
+                scs = blitz_get_unique_scs(path)
+                self.ids.blitz_sc.values = scs
+                if scs:
+                    self.ids.blitz_sc.text = scs[0]
+            except Exception as e:
+                show_simple_dialog("Ошибка", f"Не удалось прочитать файл OM:\n{e}")
+
+        open_file_chooser_search(
+            on_select,
+            prefix_filter=is_om,
+            title="Файл site_not_air",
+        )
+
+    # ── Выбор файла: Список аварий ──
+    def pick_alarms_file(self):
+        def is_alarms(fname):
+            n = fname.lower()
+            return n.endswith((".xlsx", ".xls")) and "авари" in n
+
+        def on_select(path):
+            self.ids.blitz_alarms_path.text = path
+
+        open_file_chooser_search(
+            on_select,
+            prefix_filter=is_alarms,
+            title="Файл «Список аварий»",
+        )
+
+    # ── Формирование отчёта ──
+    def generate(self):
+        try:
+            om_path = self.ids.blitz_om_path.text.strip()
+            alarms_path = self.ids.blitz_alarms_path.text.strip()
+            sc_name = self.ids.blitz_sc.text
+
+            if not om_path or not os.path.exists(om_path):
+                show_simple_dialog("Ошибка", "Не выбран файл site_not_air (*.xlsx).")
+                return
+            if not alarms_path or not os.path.exists(alarms_path):
+                show_simple_dialog("Ошибка", "Не выбран файл «Список аварий» (*.xlsx).")
+                return
+
+            # Базовые + пользовательские
+            constants = self.user_constants.copy()
+
+
+            self.ids.blitz_text_output.text = blitz_build_report(
+                om_path, alarms_path, sc_name, constants
+            )
+        except Exception as e:
+            self.ids.blitz_text_output.text = (
+                f"Ошибка при формировании отчёта:\n{e}\n\n{traceback.format_exc()}"
+            )
+
+    # ── Копирование / очистка ──
+    def copy_to_clipboard(self, string):
+        if string:
+            Clipboard.copy(string)
+
+    def clear_report(self):
+        try:
+            self.ids.blitz_text_output.text = ""
+        except Exception:
+            pass
+
 
 # ────────────────────────────────────────────────────────────────
 # КОРНЕВОЙ SCREEN MANAGER
@@ -3038,6 +3729,8 @@ class UberGoorandaApp(MDApp):
         sm.add_widget(TorusWindow(name="TorusWindow"))
         sm.add_widget(NetworkTabsWindow(name="NetworkTabsWindow"))
         sm.add_widget(BirthdayWindow(name="BirthdayWindow"))
+        sm.add_widget(BirthdayWindow(name="BirthdayWindow"))
+        sm.add_widget(BlitzReportWindow(name="BlitzReport"))   # ← НОВОЕUberGoorandaApp
 
         sm.current = "LoginWindow"
 
@@ -3166,6 +3859,20 @@ class UberGoorandaApp(MDApp):
 
     def open_organization_menu(self, caller):
         self.open_menu(caller, self.ORGANIZATION_OPTIONS)
+
+    def open_blitz_sc_menu(self, caller):
+        # Значения берём из текущего списка Spinner'а
+        try:
+            options = list(caller.values) or [
+                "Сервисный Центр Феодосия",
+                "Сервисный Центр Симферополь",
+            ]
+        except Exception:
+            options = [
+                "Сервисный Центр Феодосия",
+                "Сервисный Центр Симферополь",
+            ]
+        self.open_menu(caller, options)
 
     def open_work_type_menu(self, caller):
         self.open_menu(caller, self.WORK_TYPE_OPTIONS)
