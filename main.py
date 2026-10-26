@@ -2,7 +2,7 @@ import os
 import sys
 from api_client import api
 from kivymd.uix.button import MDIconButton
-import db   #<--------------
+import db
 import rdb
 import csv
 from paths import resource_path, service_path
@@ -3730,12 +3730,12 @@ class UberGoorandaApp(MDApp):
         sm.add_widget(NetworkTabsWindow(name="NetworkTabsWindow"))
         sm.add_widget(BirthdayWindow(name="BirthdayWindow"))
         sm.add_widget(BirthdayWindow(name="BirthdayWindow"))
-        sm.add_widget(BlitzReportWindow(name="BlitzReport"))   # ← НОВОЕUberGoorandaApp
+        sm.add_widget(BlitzReportWindow(name="BlitzReport"))
 
         sm.current = "LoginWindow"
 
         Window.softinput_mode = 'below_target'
-        Window.softinput_mode_target_margin = dp(20)  # 20dp запаса
+        Window.softinput_mode_target_margin = dp(20)
 
         return sm
 
@@ -3816,9 +3816,6 @@ class UberGoorandaApp(MDApp):
         def _sel(v):
             caller.text = v
             popup.dismiss()
-            # Callback запускаем ПОСЛЕ того, как Popup полностью закроется —
-            # иначе на MIUI (Xiaomi) перерисовка layout'а с активным Popup
-            # вызывает нативный краш.
             if on_select:
                 Clock.schedule_once(lambda dt: on_select(v), 0.15)
 
