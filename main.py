@@ -1,18 +1,14 @@
-import os
 import sys
-from api_client import api
 from kivymd.uix.button import MDIconButton
 import db
 import rdb
 import csv
-from paths import resource_path, service_path
 from api_client import api
 import webbrowser
 from datetime import datetime, timedelta
 import openpyxl
 from kivy.lang import Builder
 from kivy.core.clipboard import Clipboard
-from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.screen import MDScreen
 from kivymd.uix.screenmanager import MDScreenManager
@@ -23,9 +19,8 @@ from kivymd.uix.list import ILeftBodyTouch, OneLineAvatarIconListItem
 from kivymd.uix.toolbar import MDTopAppBar
 from kivymd.uix.dropdownitem import MDDropDownItem
 from kivy.uix.textinput import TextInput
-from kivy.uix.popup import Popup
 from kivymd.uix.list import MDList, OneLineListItem
-from kivy.uix.filechooser import FileChooserIconView, FileChooserListView
+from kivy.uix.filechooser import FileChooserIconView, FileChooserListView, FileChooserIconLayout
 from kivy.properties import ListProperty, BooleanProperty
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
@@ -42,13 +37,10 @@ from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
 from kivy.clock import Clock
-from kivy.uix.filechooser import FileChooserIconView, FileChooserIconLayout
 import os
 from kivymd.uix.label import MDLabel
 import sqlite3
-import re
 from paths import resource_path, service_path
-from api_client import api
 from kivy.properties import StringProperty, ObjectProperty
 from kivy.core.text import LabelBase
 from datetime import date
@@ -58,6 +50,20 @@ import re
 import json
 import traceback
 from pathlib import Path
+import threading
+import socket
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.scrollview import ScrollView
+from kivymd.uix.label import MDLabel
+from kivy.metrics import dp
+from datetime import datetime, date
+import calendar
+
+
+
+
+
 
 os.environ['KIVY_GL_BACKEND'] = 'sdl2'
 os.environ['KIVY_GRAPHICS'] = 'gles'
@@ -91,7 +97,6 @@ LabelBase.register(
 
 
 
-from kivy.graphics import Color, RoundedRectangle
 
 
 
@@ -665,7 +670,6 @@ class WorkerWindow(MDScreen):
     # КНОПКА «ДОБАВИТЬ СОТРУДНИКА»
     # ═══════════════════════════════════════════════════════════
     def add_worker_dialog(self):
-        from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivy.uix.textinput import TextInput
@@ -765,7 +769,6 @@ class WorkerWindow(MDScreen):
     # КНОПКА «УДАЛИТЬ СОТРУДНИКА»
     # ═══════════════════════════════════════════════════════════
     def delete_worker_dialog(self):
-        from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivy.uix.scrollview import ScrollView
@@ -975,7 +978,6 @@ class WorkerWindow(MDScreen):
 
     def _ask_import_mode(self, new_workers):
         """Спрашивает: дополнить или заменить существующий список."""
-        from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivy.metrics import dp
@@ -1082,7 +1084,7 @@ class WorkerWindow(MDScreen):
 
     def _confirm_delete(self, name):
         """Подтверждение удаления."""
-        from kivy.uix.popup import Popup
+
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivy.metrics import dp
@@ -1227,7 +1229,6 @@ class UberWindow(MDScreen):
 
     def _get_owner_full_name(self):
         """ФИО владельца заявки из авторизации."""
-        from api_client import api
         parts = [api.last_name, api.first_name]
         full_name = " ".join(p for p in parts if p).strip()
         return full_name or api.first_name or "—"
@@ -1264,7 +1265,6 @@ class UberWindow(MDScreen):
         """Запрашивает следующий свободный номер CRWO для выбранной организации."""
         from sync import check_crwo_number
         from kivy.clock import Clock
-        import threading
 
         organization = self.ids.organization.text
         region = self.ids.region_short.text
@@ -1292,8 +1292,6 @@ class UberWindow(MDScreen):
 
     def _set_owner_from_auth(self):
         """Владелец заявки = текущий авторизованный пользователь."""
-        from api_client import api
-
         # ФИО из api
         parts = [api.last_name, api.first_name]
         full_name = " ".join(p for p in parts if p).strip()
@@ -1309,14 +1307,8 @@ class UberWindow(MDScreen):
         """Свой календарь: три колонки — день, месяц, год. Без MDDatePicker.
         По OK: сохраняет дату и запускает таймер сброса на 5 минут.
         """
-        from kivy.uix.popup import Popup
-        from kivy.uix.boxlayout import BoxLayout
-        from kivy.uix.button import Button
-        from kivy.uix.scrollview import ScrollView
-        from kivymd.uix.label import MDLabel
-        from kivy.metrics import dp
-        from datetime import datetime, date
-        import calendar
+
+
 
         today = datetime.now().date()
 
@@ -1534,7 +1526,6 @@ class UberWindow(MDScreen):
 
     def open_time_picker(self):
         """Диалог выбора времени: часы 0–23, минуты 00/15/30/45."""
-        from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivy.uix.scrollview import ScrollView
@@ -1723,7 +1714,6 @@ class UberWindow(MDScreen):
     # ── Валидация и старт ──
     def start(self):
         """Валидация + проверка номера CRWO на сервере."""
-        import threading
         # Очищаем поле генератора, если оно неактивно
         if self.ids.generator_number_box.opacity == 0:
             self.ids.generator_number.text = ""
@@ -1819,8 +1809,6 @@ class UberWindow(MDScreen):
 
     def _finalize_and_show(self, region, value, organization, forced):
         """Сформировать заявку и перейти на CrwoWindow."""
-        from sync import commit_crwo_number
-        from kivymd.app import MDApp
 
         print(f"[uber] finalize: region={region}, value={value}, "
               f"organization={organization}, forced={forced}")
@@ -1868,7 +1856,6 @@ class UberWindow(MDScreen):
 
     def _show_taken_dialog(self, region, value, organization, result):
         """Диалог: номер уже использован в этой организации."""
-        from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivymd.uix.label import MDLabel
@@ -1958,7 +1945,7 @@ class UberWindow(MDScreen):
 
     def _show_offline_and_proceed(self, region, value, organization):
         """Предупреждение offline, потом формирование без коммита."""
-        from kivy.uix.popup import Popup
+
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivymd.uix.label import MDLabel
@@ -2341,7 +2328,6 @@ class TorusWindow(MDScreen):
                 "Сначала выберите файл через кнопку ВЫБРАТЬ ФАЙЛ",
             )
             return
-        import os
         if not os.path.exists(self.last_path):
             show_simple_dialog(
                 "Внимание",
@@ -2799,7 +2785,6 @@ class BirthdayWindow(MDScreen):
 
     # ── Спросить: дополнить или заменить ──
     def _ask_import_mode(self, new_rows):
-        from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         from kivy.metrics import dp
@@ -2897,28 +2882,17 @@ class BirthdayWindow(MDScreen):
 # ────────────────────────────────────────────────────────────────
 # BLITZ REPORT — ежедневная сводка ЦТЭиСО
 # ────────────────────────────────────────────────────────────────
-import re
-import json
-import traceback
-from pathlib import Path
 
 BLITZ_PRIORITY_ORDER = ["P0", "P1", "P2", "P3", "НП"]
 BLITZ_CONFIG_FILE = "blitz_config.json"
-
-BLITZ_DEFAULT_CONSTANTS = {
-    "CR1709": "недоступна в связи с прилётом БПЛА",
-    "CR0336": "неисправное ТП (БС ушла из статистики)",
-}
 
 
 def _blitz_config_path():
     return service_path(BLITZ_CONFIG_FILE)
 
 
-BLITZ_DEFAULT_CONSTANTS = {
-    "CR1709": "недоступна в связи с прилётом БПЛА",
-    "CR0336": "неисправное ТП (БС ушла из статистики)",
-}
+BLITZ_DEFAULT_CONSTANTS = {}
+
 
 
 def blitz_load_user_constants():
@@ -2952,15 +2926,179 @@ def blitz_effective_constants():
     merged.update(blitz_load_user_constants())
     return merged
 
+# ────────────────────────────────────────────────────────────────
+# BLITZ REPORT — resource_plan.xlsx (приоритеты генерации)
+# ────────────────────────────────────────────────────────────────
+def blitz_read_resource_plan(path):
+    """Читает лист 'Приоритеты БС'. Колонка B (BlackOut).
+    Возвращает dict: { 'CR0001': 'генерация - приоритет 0', ... }
+    """
+    res = {}
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+        try:
+            if "Приоритеты БС" not in wb.sheetnames:
+                print("[blitz] В файле нет листа 'Приоритеты БС'")
+                return res
+
+            ws = wb["Приоритеты БС"]
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if not row or not row[0]:
+                    continue
+                bts = str(row[0]).strip().upper()
+                # Колонка B (индекс 1) — BlackOut
+                blackout = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+                if blackout:
+                    res[bts] = blackout
+        finally:
+            wb.close()
+    except Exception as e:
+        print(f"[blitz] Ошибка чтения resource_plan: {e}")
+    return res
+
+
+# ────────────────────────────────────────────────────────────────
+# BLITZ REPORT — сохранение resource_plan.xlsx между запусками
+# ────────────────────────────────────────────────────────────────
+def _blitz_plan_storage_path():
+    return service_path("blitz_resource_plan.xlsx")
+
+
+def _blitz_plan_meta_path():
+    return service_path("blitz_resource_plan.json")
+
+_server_status = {"state": "unknown", "ts": 0}  # unknown / online / offline
+
+
+def _ping_server(timeout=3):
+    """Проверяет TCP-соединение с api.ubergoober.site:8443."""
+    try:
+        s = socket.create_connection(("api.ubergoober.site", 8443), timeout=timeout)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
+def _server_ping_loop(app):
+    """Фоновый поток: пингует сервер раз в 15 секунд."""
+    import time
+    while True:
+        ok = _ping_server()
+        _server_status["state"] = "online" if ok else "offline"
+        _server_status["ts"] = time.time()
+
+        # Обновляем UI в главном потоке
+        Clock.schedule_once(lambda dt: _update_ping_ui(app), 0)
+
+        time.sleep(15)
+
+
+def _update_ping_ui(app):
+    """Меняет иконку и цвет в шапке Gooranda."""
+    try:
+        gooranda = app.root.get_screen("Gooranda")
+        # Теперь ищем виджет с id: ping_icon
+        icon_widget = gooranda.ids.gooranda_header.ids.ping_icon
+        state = _server_status["state"]
+
+        if state == "online":
+            icon_widget.icon = "cloud-check"            # Облачко с галочкой
+            icon_widget.text_color = (0.2, 0.8, 0.3, 1) # Зеленый
+        elif state == "offline":
+            icon_widget.icon = "cloud-off-outline"      # Облачко перечеркнутое
+            icon_widget.text_color = (0.9, 0.2, 0.2, 1) # Красный
+        else:
+            icon_widget.icon = "cloud-question"         # Облачко с вопросом
+            icon_widget.text_color = (0.9, 0.7, 0.1, 1) # Желтый
+    except Exception as e:
+        print(f"[ping] update_ui: {e}")
+
+
+def start_ping_thread(app):
+    """Запускает фоновый пинг при старте приложения."""
+    t = threading.Thread(target=_server_ping_loop, args=(app,), daemon=True)
+    t.start()
+    print("[ping] фоновый поток запущен")
+
+
+def blitz_save_plan_file(src_path):
+    """Копирует выбранный файл в папку приложения."""
+    import shutil
+
+    if not src_path or not os.path.exists(src_path):
+        return False, "", "Файл не найден"
+
+    dest = _blitz_plan_storage_path()
+    try:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+
+        if os.path.exists(dest):
+            try:
+                os.remove(dest)
+            except Exception as e:
+                print(f"[blitz] не удалось удалить старый файл: {e}")
+
+        shutil.copy2(src_path, dest)
+
+        meta = {
+            "original_path": src_path,
+            "original_name": os.path.basename(src_path),
+            "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        with open(_blitz_plan_meta_path(), "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        return True, dest, None
+
+    except Exception as e:
+        print(f"[blitz] save plan error: {e}")
+        return False, "", str(e)
+
+
+def blitz_get_saved_plan_path():
+    p = _blitz_plan_storage_path()
+    return p if os.path.exists(p) else ""
+
+
+def blitz_get_saved_plan_info():
+    p = _blitz_plan_meta_path()
+    if not os.path.exists(p):
+        return {}
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def blitz_clear_saved_plan():
+    for p in (_blitz_plan_storage_path(), _blitz_plan_meta_path()):
+        try:
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception as e:
+            print(f"[blitz] clear saved plan: {e}")
+
 
 def blitz_parse_priority(val):
     if val is None:
         return "НП"
-    s = str(val).strip()
+    s = str(val).strip().lower()
     if not s:
         return "НП"
-    m = re.search(r"приоритет\s*(\d)", s, re.IGNORECASE)
-    return f"P{m.group(1)}" if m else "НП"
+
+    # Ищем "приоритет 0", "приоритет 3" и т.п. (в т.ч. "генерация - приоритет 3")
+    m = re.search(r"приоритет\s*(\d)", s)
+    if m:
+        return f"P{m.group(1)}"
+
+    # Ищем "P0", "P1", "P2", "P3"
+    m2 = re.search(r"\b(p[0-3])\b", s)
+    if m2:
+        return m2.group(1).upper()
+
+    return "НП"
 
 
 def blitz_format_duration(delta):
@@ -3063,8 +3201,11 @@ def _blitz_build_ne(om, sc_name, get_prio, constants):
         if bts in seen:
             continue
         seen.add(bts)
-        result.append({"bts": bts, "priority": get_prio(bts),
-                       "reason": "причина не указана"})
+        result.append({
+            "bts": bts,
+            "priority": get_prio(bts),
+            "reason": "причина не указана",
+        })
 
     for bts, reason in constants.items():
         if bts in seen:
@@ -3072,7 +3213,11 @@ def _blitz_build_ne(om, sc_name, get_prio, constants):
                 if x["bts"] == bts:
                     x["reason"] = reason
         else:
-            result.append({"bts": bts, "priority": get_prio(bts), "reason": reason})
+            result.append({
+                "bts": bts,
+                "priority": get_prio(bts),
+                "reason": reason,
+            })
             seen.add(bts)
     return result
 
@@ -3113,12 +3258,14 @@ def _blitz_group(items):
 
 
 def _blitz_format_ne(items):
+    """NE DISCONNECTED — каждая станция с новой строки, с приоритетом."""
     lines, by_p = [], _blitz_group(items)
-    for p in BLITZ_PRIORITY_ORDER:
+    for p in BLITZ_PRIORITY_ORDER:  # ["P0","P1","P2","P3","НП"]
         if p not in by_p:
             continue
-        for it in by_p[p]:
-            lines.append(f"- {blitz_label(p)} {it['bts']} — {it['reason']}")
+        group_sorted = sorted(by_p[p], key=lambda x: x["bts"])
+        for it in group_sorted:
+            lines.append(f"{blitz_label(p)} {it['bts']} — {it['reason']}")
     return "\n".join(lines)
 
 
@@ -3127,14 +3274,14 @@ def _blitz_format_akb(items):
     for p in BLITZ_PRIORITY_ORDER:
         if p not in by_p:
             continue
-        group = by_p[p]
-        if len(group) == 1:
-            lines.append(f"- {blitz_label(p)} {group[0]['bts']}")
+        group_sorted = sorted(by_p[p], key=lambda x: x["bts"])
+
+        if len(group_sorted) == 1:
+            lines.append(f"{blitz_label(p)} {group_sorted[0]['bts']}")
         else:
-            lines.append(
-                f"- {blitz_label_n(p, len(group))} "
-                f"{', '.join(it['bts'] for it in group)}"
-            )
+            joined = ", ".join(it["bts"] for it in group_sorted)
+            lines.append(f"{blitz_label_n(p, len(group_sorted))} {joined}")
+
     return "\n".join(lines)
 
 
@@ -3143,28 +3290,38 @@ def _blitz_format_gen(items):
     for p in BLITZ_PRIORITY_ORDER:
         if p not in by_p:
             continue
-        group = by_p[p]
-        if len(group) == 1:
-            lines.append(f"- {blitz_label(p)} {group[0]['bts']} — {group[0]['duration']}")
+        group_sorted = sorted(by_p[p], key=lambda x: x["bts"])
+
+        if len(group_sorted) == 1:
+            it = group_sorted[0]
+            lines.append(f"{blitz_label(p)} {it['bts']} — {it['duration']}")
         else:
-            joined = "; ".join(f"{it['bts']} — {it['duration']}" for it in group)
-            lines.append(f"- {blitz_label_n(p, len(group))} {joined}")
+            joined = "; ".join(
+                f"{it['bts']} — {it['duration']}" for it in group_sorted
+            )
+            lines.append(f"{blitz_label_n(p, len(group_sorted))} {joined}")
+
     return "\n".join(lines)
 
 
-def blitz_build_report(om_path, alarms_path, sc_name, constants):
+def blitz_build_report(om_path, alarms_path, sc_name, constants, plan_path=None):
     om = blitz_read_om(om_path)
     diesel = blitz_read_diesel(om_path)
     alarms = blitz_read_alarms(alarms_path)
     file_dt = blitz_parse_file_dt(om_path)
 
-    om_prio = {r["bts"]: blitz_parse_priority(r["diesel_priority"])
-               for r in om if r["diesel_priority"]}
-    alm_prio = {r["bts"]: blitz_parse_priority(r["priority"])
-                for r in alarms if r["sc"] == sc_name and r["priority"]}
+    # ── Загружаем приоритеты из resource_plan (BlackOut) ──
+    gen_prio = {}
+    if plan_path and os.path.exists(plan_path):
+        raw_plan = blitz_read_resource_plan(plan_path)
+        for bts, blackout_str in raw_plan.items():
+            p = blitz_parse_priority(blackout_str)
+            if p != "НП":
+                gen_prio[bts] = p
+        print(f"[blitz] Загружено приоритетов: {len(gen_prio)}")
 
     def get_prio(bts):
-        return om_prio.get(bts) or alm_prio.get(bts) or "НП"
+        return gen_prio.get(bts, "НП")
 
     ne = _blitz_build_ne(om, sc_name, get_prio, constants)
     gen = _blitz_build_gen(diesel, sc_name, get_prio, file_dt)
@@ -3176,14 +3333,15 @@ def blitz_build_report(om_path, alarms_path, sc_name, constants):
         f"📡 ЦТЭиСО {short_sc} — сводка", "",
         f"📅 Дата формирования: {now.strftime('%d.%m.%Y')}",
         f"🕐 Время формирования: {now.strftime('%H:%M')}", "", "---", "",
-        f"## 🔴 NE DISCONNECTED ({len(ne)} БС)", "",
+        f" 🔴 NE DISCONNECTED ({len(ne)} БС)", "",
         _blitz_format_ne(ne) if ne else "0 БС", "",
-        f"## 🔋 На АКБ: {len(akb)} БС", "",
+        f" 🔋 На АКБ: {len(akb)} БС", "",
         _blitz_format_akb(akb) if akb else "0 БС", "",
-        f"## ⚡ На Генерации: {len(gen)} БС", "",
+        f" ⚡ На Генерации: {len(gen)} БС", "",
         _blitz_format_gen(gen) if gen else "0 БС",
     ]
     return "\n".join(out)
+
 def _blitz_search_dirs():
     """Папки, где ищем файлы (Android и Desktop)."""
     candidates = []
@@ -3394,6 +3552,22 @@ class BlitzReportWindow(MDScreen):
             )
         except Exception:
             pass
+
+        # Восстанавливаем сохранённый resource_plan
+        saved = blitz_get_saved_plan_path()
+        if saved:
+            try:
+                self.ids.blitz_plan_path.text = saved
+                info = blitz_get_saved_plan_info()
+                name = info.get("original_name", os.path.basename(saved))
+                saved_at = info.get("saved_at", "")
+                self.ids.blitz_plan_status.text = (
+                    f"✅ {name} (загружен {saved_at})"
+                )
+                self.ids.blitz_plan_status.text_color = (0.2, 0.6, 0.2, 1)
+            except Exception as e:
+                print(f"[blitz] restore plan: {e}")
+
         Clock.schedule_once(lambda dt: self._refresh_constants_list(), 0.1)
 
     def on_pre_enter(self, *args):
@@ -3543,11 +3717,63 @@ class BlitzReportWindow(MDScreen):
             title="Файл «Список аварий»",
         )
 
+    def pick_plan_file(self):
+        """Выбор resource_plan.xlsx с сохранением между запусками."""
+
+        def is_plan(fname):
+            n = fname.lower()
+            return n.endswith((".xlsx", ".xls")) and "resource" in n
+
+        def on_select(path):
+            if not path:
+                return
+            ok, saved_path, err = blitz_save_plan_file(path)
+            if not ok:
+                show_simple_dialog("Ошибка", f"Не удалось сохранить файл:\n{err}")
+                return
+
+            try:
+                self.ids.blitz_plan_path.text = saved_path
+                info = blitz_get_saved_plan_info()
+                name = info.get("original_name", os.path.basename(saved_path))
+                saved_at = info.get("saved_at", "")
+                self.ids.blitz_plan_status.text = (
+                    f"✅ {name} (загружен {saved_at})"
+                )
+                self.ids.blitz_plan_status.text_color = (0.2, 0.6, 0.2, 1)
+            except Exception as e:
+                print(f"[blitz] pick_plan_file UI: {e}")
+
+            show_simple_dialog(
+                "Готово",
+                f"Файл сохранён.\n\n"
+                f"Оригинал: {path}\n"
+                f"Копия:    {saved_path}\n\n"
+                f"Файл будет использоваться при следующем запуске автоматически."
+            )
+
+        open_file_chooser_search(
+            on_select,
+            prefix_filter=is_plan,
+            title="Выберите resource_plan.xlsx",
+        )
+
+    def clear_saved_plan(self):
+        """Сброс сохранённого файла."""
+        blitz_clear_saved_plan()
+        try:
+            self.ids.blitz_plan_path.text = ""
+            self.ids.blitz_plan_status.text = "❌ Файл не загружен"
+            self.ids.blitz_plan_status.text_color = (0.85, 0.2, 0.2, 1)
+        except Exception:
+            pass
+
     # ── Формирование отчёта ──
     def generate(self):
         try:
             om_path = self.ids.blitz_om_path.text.strip()
             alarms_path = self.ids.blitz_alarms_path.text.strip()
+            plan_path = self.ids.blitz_plan_path.text.strip()
             sc_name = self.ids.blitz_sc.text
 
             if not om_path or not os.path.exists(om_path):
@@ -3556,13 +3782,19 @@ class BlitzReportWindow(MDScreen):
             if not alarms_path or not os.path.exists(alarms_path):
                 show_simple_dialog("Ошибка", "Не выбран файл «Список аварий» (*.xlsx).")
                 return
+            if not plan_path or not os.path.exists(plan_path):
+                show_simple_dialog(
+                    "Ошибка",
+                    "Не загружен resource_plan.xlsx.\n"
+                    "Нажмите «📥 ЗАГРУЗИТЬ resource_plan»."
+                )
+                return
 
-            # Базовые + пользовательские
+            # Пользовательские константы (для причин NE)
             constants = self.user_constants.copy()
 
-
             self.ids.blitz_text_output.text = blitz_build_report(
-                om_path, alarms_path, sc_name, constants
+                om_path, alarms_path, sc_name, constants, plan_path
             )
         except Exception as e:
             self.ids.blitz_text_output.text = (
@@ -3629,6 +3861,8 @@ class UberGoorandaApp(MDApp):
     def on_start(self):
         db.init_db()
         rdb.init_db()
+        # ── Запускаем индикатор связи ──
+        start_ping_thread(self)
 
         # ── Проверка токена ──
         if api.is_authorized():

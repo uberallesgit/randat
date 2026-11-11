@@ -145,6 +145,27 @@
         valign: "middle"
         padding: SPACE_SM, 0
 
+    # ── Индикатор связи с сервером ──
+    Label:
+        id: ping_text
+        text: ""
+        color: COLOR_ON_DARK
+        font_size: "12sp"
+        size_hint_x: None
+        width: "60dp"
+        pos_hint: { "center_y": .5 }
+        # ── Индикатор связи с сервером (Иконка) ──
+    MDIcon:
+        id: ping_icon
+        icon: "cloud-question"
+        theme_text_color: "Custom"
+        text_color: (0.9, 0.7, 0.1, 1)     # Желтый по умолчанию
+        font_size: "24sp"
+        size_hint_x: None
+        width: "40dp"
+        pos_hint: { "center_y": .5 }
+        halign: "center"
+
     Widget:
         # растяжка — прижимает правые иконки к краю
 
@@ -1207,6 +1228,53 @@
                         height: "48dp"
                         pos_hint: {"center_y": .5}
                         on_release: root.pick_alarms_file()
+
+                # ── Приоритеты генерации (resource_plan.xlsx) ──
+                MDLabel:
+                    text: "Приоритеты генерации (resource_plan.xlsx):"
+                    theme_text_color: "Custom"
+                    text_color: COLOR_DARK
+                    size_hint_y: None
+                    height: "24dp"
+
+                MDLabel:
+                    id: blitz_plan_status
+                    text: "❌ Файл не загружен"
+                    theme_text_color: "Custom"
+                    text_color: (0.85, 0.2, 0.2, 1)
+                    font_size: "12sp"
+                    size_hint_y: None
+                    height: "22dp"
+                    halign: "left"
+
+                MDTextField:
+                    id: blitz_plan_path
+                    hint_text: "Путь к resource_plan.xlsx"
+                    input_type: "text"
+                    mode: "rectangle"
+                    size_hint_y: None
+                    height: 0
+                    opacity: 0
+                    disabled: True
+
+                MDBoxLayout:
+                    size_hint_y: None
+                    height: SIZE_BUTTON
+                    spacing: SPACE_SM
+
+                    RoundedButton:
+                        text: "📥 ЗАГРУЗИТЬ resource_plan"
+                        background_color: COLOR_PRIMARY
+                        color: COLOR_ON_DARK
+                        on_release: root.pick_plan_file()
+
+#                    RoundedButton:
+#                        text: "✖ СБРОСИТЬ"
+#                        background_color: COLOR_DANGER
+#                        color: COLOR_ON_DARK
+#                        size_hint_x: None
+#                        width: "140dp"
+#                        on_release: root.clear_saved_plan()
 
                 # ── СЦ ──
                 MDBoxLayout:
