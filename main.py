@@ -60,6 +60,40 @@ from kivy.metrics import dp
 from datetime import datetime, date
 import calendar
 
+# ────────────────────────────────────────────────────────────────
+# НАСТРОЙКИ СЕРВЕРА (IP / Домен)
+# ────────────────────────────────────────────────────────────────
+SERVER_CONFIG_FILE = "server_config.json"
+
+
+def get_server_url():
+    """Возвращает сохраненный URL сервера или дефолтный."""
+    path = service_path(SERVER_CONFIG_FILE)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                url = data.get("server_url", "").strip()
+                if url:
+                    return url
+        except Exception as e:
+            print(f"[config] Ошибка чтения сервера: {e}")
+
+    # Дефолтный адрес (на случай, если файла нет)
+    return "https://api.ubergoober.site:8443"
+
+
+def save_server_url(url):
+    """Сохраняет URL сервера в файл."""
+    path = service_path(SERVER_CONFIG_FILE)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"server_url": url.strip()}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"[config] Ошибка сохранения сервера: {e}")
+        return False
+
 
 
 
@@ -174,6 +208,43 @@ MIN_PASSWORD_LENGTH = 8
 
 class LoginWindow(MDScreen):
     """Поля: Имя, Фамилия, Пароль. Кнопки: Войти / Зарегистрироваться."""
+
+    def save_server_from_login(self):
+        """Сохраняет IP-адрес сервера прямо из окна авторизации."""
+        url = self.ids.login_server_url.text.strip()
+        if not url:
+            self.set_error("Введите адрес сервера (IP или домен)")
+            return
+
+        # Если пользователь забыл указать протокол, добавляем https://
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        if save_server_url(url):
+            self.ids.login_server_url.text = url
+            self.set_error("Адрес сервера сохранён!")
+
+            # Запускаем принудительную проверку связи, чтобы сразу обновить статус
+            try:
+                import threading
+                def force_ping():
+                    ok = _ping_server()
+                    _server_status["state"] = "online" if ok else "offline"
+                    # Обновляем UI (на случай, если окно открыто)
+                    Clock.schedule_once(lambda dt: _update_ping_ui(MDApp.get_running_app()), 0)
+
+                threading.Thread(target=force_ping, daemon=True).start()
+            except Exception as e:
+                print(f"[login] force_ping error: {e}")
+        else:
+            self.set_error("Ошибка сохранения. Проверьте права.")
+
+    def on_kv_post(self, *_):
+        """Загружаем текущий сервер при открытии окна логина."""
+        try:
+            self.ids.login_server_url.text = get_server_url()
+        except Exception as e:
+            print(f"[login] on_kv_post: {e}")
 
 
     def set_error(self, text: str) -> None:
@@ -2210,6 +2281,33 @@ class SettingsWindow(MDScreen):
         self.dialog = None
         self.file_manager = None
 
+    def on_kv_post(self, *_):
+        # Загружаем текущий адрес сервера в текстовое поле при старте
+        try:
+            self.ids.server_url_input.text = get_server_url()
+        except Exception as e:
+            print(f"[settings] init server url: {e}")
+
+    def save_server_settings(self):
+        url = self.ids.server_url_input.text.strip()
+        if not url:
+            self.show_dialog("Адрес сервера не может быть пустым!")
+            return
+
+        # Если пользователь забыл указать протокол, добавляем https://
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+
+        if save_server_url(url):
+            self.ids.server_url_input.text = url
+            self.show_dialog(
+                "Адрес сервера сохранен!\n\n"
+                "Изменения вступят в силу при следующем запросе.\n"
+                "Возможно, потребуется перезапустить приложение."
+            )
+        else:
+            self.show_dialog("Ошибка при сохранении. Проверьте права доступа.")
+
     def logout(self):
         """Выход из аккаунта."""
         api.clear_token()
@@ -2969,14 +3067,37 @@ def _blitz_plan_meta_path():
 
 _server_status = {"state": "unknown", "ts": 0}  # unknown / online / offline
 
+import urllib.parse
+
 
 def _ping_server(timeout=3):
-    """Проверяет TCP-соединение с api.ubergoober.site:8443."""
+    """Проверяет TCP-соединение с сервером из настроек."""
     try:
-        s = socket.create_connection(("api.ubergoober.site", 8443), timeout=timeout)
+        url = get_server_url()
+
+        # Разбираем URL правильно (понимает и http, и https, и порты)
+        parsed = urllib.parse.urlparse(url)
+
+        # Получаем хост (IP или домен)
+        host = parsed.hostname
+        if not host:
+            # Если urlparse не смог, пробуем простой сплит
+            host = url.replace("https://", "").replace("http://", "").split(":")[0]
+
+        # Определяем порт
+        if parsed.port:
+            port = parsed.port
+        elif parsed.scheme == "https":
+            port = 443
+        else:
+            port = 80
+
+        # Пробуем подключиться
+        s = socket.create_connection((host, port), timeout=timeout)
         s.close()
         return True
-    except Exception:
+    except Exception as e:
+        print(f"[ping] error: {e}")
         return False
 
 
@@ -2995,24 +3116,36 @@ def _server_ping_loop(app):
 
 
 def _update_ping_ui(app):
-    """Меняет иконку и цвет в шапке Gooranda."""
+    """Рекурсивно обновляет иконку связи на ВСЕХ экранах."""
     try:
-        gooranda = app.root.get_screen("Gooranda")
-        # Теперь ищем виджет с id: ping_icon
-        icon_widget = gooranda.ids.gooranda_header.ids.ping_icon
         state = _server_status["state"]
 
         if state == "online":
-            icon_widget.icon = "cloud-check"            # Облачко с галочкой
-            icon_widget.text_color = (0.2, 0.8, 0.3, 1) # Зеленый
+            icon_name = "cloud-check"
+            color = (0.2, 0.8, 0.3, 1)  # Зеленый
         elif state == "offline":
-            icon_widget.icon = "cloud-off-outline"      # Облачко перечеркнутое
-            icon_widget.text_color = (0.9, 0.2, 0.2, 1) # Красный
+            icon_name = "cloud-off-outline"
+            color = (0.9, 0.2, 0.2, 1)  # Красный
         else:
-            icon_widget.icon = "cloud-question"         # Облачко с вопросом
-            icon_widget.text_color = (0.9, 0.7, 0.1, 1) # Желтый
+            icon_name = "cloud-question"
+            color = (0.9, 0.7, 0.1, 1)  # Желтый
+
+        # Проходимся по всем экранам
+        for screen in app.root.screens:
+            # Рекурсивно ищем все виджеты класса ScreenHeader
+            for child in screen.walk():
+                # Проверяем по имени класса, чтобы не делать лишних импортов
+                if child.__class__.__name__ == "ScreenHeader":
+                    try:
+                        # Внутри найденной шапки ищем нашу иконку по локальному id
+                        if "ping_icon" in child.ids:
+                            child.ids.ping_icon.icon = icon_name
+                            child.ids.ping_icon.text_color = color
+                    except Exception as e:
+                        print(f"[ping] error updating widget: {e}")
+
     except Exception as e:
-        print(f"[ping] update_ui: {e}")
+        print(f"[ping] update_ui error: {e}")
 
 
 def start_ping_thread(app):

@@ -47,6 +47,19 @@
     bold: True
     font_size: "14sp"
 
+    # ── ДОБАВИТЬ ЭТИ СТРОКИ ──
+    text_size: self.width - dp(20), None             # Ограничиваем ширину текста (с отступами)
+    shorten: True                                    # Включаем обрезку
+    shorten_from: "right"                            # Обрезаем справа (будет "Заправка генер...")
+
+    canvas.before:
+        Color:
+            rgba: (0.42, 0.16, 0.85, 0.4) if self.disabled else (self.background_color if self.background_color else (0.42, 0.16, 0.85, 1))
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [ 10, 10, 10, 10 ]
+
     canvas.before:
         Color:
             rgba: (0.42, 0.16, 0.85, 0.4) if self.disabled else (self.background_color if self.background_color else (0.42, 0.16, 0.85, 1))
@@ -500,19 +513,11 @@
                 size_hint_y: None
                 height: self.minimum_height
 
-                # ── Номер CRWO (симметрично: -1 | поле | +1) ──
+                                # ── Номер CRWO
                 MDBoxLayout:
                     size_hint_y: None
-                    height: SIZE_ROW
+                    height: "56dp"      # Жесткая высота
                     spacing: SPACE_SM
-
-#                    RoundedButton:
-#                        text: "-1"
-#                        size_hint_x: None
-#                        width: "60dp"
-#                        height: "48dp"
-#                        pos_hint: {"center_y": .5}
-#                        on_release: root.crwo_decrement(root.ids.crwo_number.text)
 
                     MDTextField:
                         id: crwo_number
@@ -531,27 +536,34 @@
                         pos_hint: {"center_y": .5}
                         on_release: root.crwo_increment(root.ids.crwo_number.text)
 
-                # ── БС (спиннер | поле | Очистить) ──
+                                                # ── БС (кнопка | поле | Очистить) ──
                 MDBoxLayout:
                     size_hint_y: None
-                    height: SIZE_ROW
+                    height: "56dp"
                     spacing: SPACE_SM
 
-                    FixedDropDownItem:
-                        id: moto_spinner
-                        text: "БС"
+                    RoundedButton:
+                        text: moto_spinner.text
                         size_hint_x: None
-                        width: "100dp"
+                        width: "80dp"
+                        height: "48dp"
                         pos_hint: {"center_y": .5}
                         on_release: app.open_moto_menu(moto_spinner)
+
+                        FixedDropDownItem:
+                            id: moto_spinner
+                            text: "БС"
+                            opacity: 0
+                            size_hint: None, None
+                            size: 0, 0
+                            on_release: app.open_moto_menu(moto_spinner)
 
                     MDTextField:
                         id: bs_name
                         hint_text: "Номер БС"
                         input_type: "text"
                         mode: "rectangle"
-                        size_hint_y: None
-                        height: "48dp"
+                        size_hint_y: 1          # Растягиваем на всю высоту
                         pos_hint: {"center_y": .5}
 
                     RoundedButton:
@@ -564,7 +576,7 @@
                         pos_hint: {"center_y": .5}
                         on_release: root.clear_bs_name()
 
-                # ── Чекбокс «Единой заявкой» — ПОД полем Номер БС ──
+                # ── Чекбокс «Единой заявкой» ──
                 MDBoxLayout:
                     id: single_request_box
                     size_hint_y: None
@@ -586,46 +598,80 @@
                         valign: "middle"
                         pos_hint: {"center_y": .5}
 
-                # ── Регион / Организация (50/50) ──
+                                # ── Регион / Организация ──
                 MDBoxLayout:
                     orientation: "horizontal"
                     size_hint_y: None
-                    height: SIZE_ROW
+                    height: "56dp"
                     spacing: SPACE_SM
 
-                    FixedDropDownItem:
-                        id: region_short
-                        text: "FEO"
+                    # Скрытый контейнер для логики
+                    Widget:
+                        size_hint: None, None
+                        size: 0, 0
+
+                    # Визуальные кнопки
+                    RoundedButton:
+                        text: region_short.text
                         size_hint_x: 0.5
-                        pos_hint: {"center_y": .5}
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
                         on_release: app.open_region_menu(region_short)
 
-                    FixedDropDownItem:
-                        id: organization
-                        text: "Миранда-Медиа"
+                        FixedDropDownItem:
+                            id: region_short
+                            text: "FEO"
+                            opacity: 0
+                            on_release: app.open_region_menu(region_short)
+
+                    RoundedButton:
+                        text: organization.text
                         size_hint_x: 0.5
-                        pos_hint: {"center_y": .5}
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
                         on_release: app.open_organization_menu(organization)
 
-                # ── Тип работ + тип запитки (50/50) ──
+                        FixedDropDownItem:
+                            id: organization
+                            text: "Миранда-Медиа"
+                            opacity: 0
+                            on_release: app.open_organization_menu(organization)
+
+                # ── Тип работ + тип запитки ──
                 MDBoxLayout:
                     orientation: "horizontal"
                     size_hint_y: None
-                    height: SIZE_ROW
+                    height: "56dp"
                     spacing: SPACE_SM
 
-                    FixedDropDownItem:
-                        id: work_type
-                        text: "🔋 ДГУ"
+                    # Скрытый контейнер для логики
+                    Widget:
+                        size_hint: None, None
+                        size: 0, 0
+                        FixedDropDownItem:
+                            id: work_type
+                            text: "🔋 ДГУ"
+                            opacity: 0
+                            on_release: app.open_work_type_menu(work_type)
+                        FixedDropDownItem:
+                            id: work_description_spinner
+                            text: "⛽️Заправка генераторов Базовых Станций"
+                            opacity: 0
+                            on_release: app.open_work_desc_menu(work_description_spinner)
+
+                    # Визуальные кнопки
+                    RoundedButton:
+                        text: work_type.text
                         size_hint_x: 0.5
-                        pos_hint: {"center_y": .5}
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
                         on_release: app.open_work_type_menu(work_type)
 
-                    FixedDropDownItem:
-                        id: work_description_spinner
-                        text: "⛽️Заправка генераторов Базовых Станций"
+                    RoundedButton:
+                        text: work_description_spinner.text
                         size_hint_x: 0.5
-                        pos_hint: {"center_y": .5}
+                        height: "48dp"
+                        pos_hint: { "center_y": .5 }
                         on_release: app.open_work_desc_menu(work_description_spinner)
 
                 # ── Своё описание работ (схлопнута по умолчанию) ──
@@ -796,6 +842,43 @@
             orientation: "vertical"
             padding: SPACE_LG
             spacing: SPACE_LG
+
+            # ── Настройки сервера ──
+            MDLabel:
+                text: "Адрес сервера (IP или домен):"
+                theme_text_color: "Custom"
+                text_color: COLOR_DARK
+                size_hint_y: None
+                height: "24dp"
+
+            MDBoxLayout:
+                size_hint_y: None
+                height: SIZE_ROW
+                spacing: SPACE_SM
+
+                MDTextField:
+                    id: server_url_input
+                    hint_text: "http://123.45.67.89:8443"
+                    input_type: "text"
+                    mode: "rectangle"
+                    size_hint_y: None
+                    height: "48dp"
+                    pos_hint: { "center_y": .5 }
+
+                RoundedButton:
+                    text: "💾 СОХРАНИТЬ"
+                    background_color: COLOR_PRIMARY
+                    color: COLOR_ON_DARK
+                    size_hint_x: None
+                    width: "130dp"
+                    height: "48dp"
+                    pos_hint: { "center_y": .5 }
+                    on_release: root.save_server_settings()
+
+            # Разделитель
+            MDBoxLayout:
+                size_hint_y: None
+                height: "20dp"
 
             MDLabel:
                 text: "Выберите файл Excel (.xls, .xlsx, .csv) для обновления базы данных."
@@ -1089,6 +1172,37 @@
 
             Widget:
                 # верхний растягивающийся отступ — центрирует форму по высоте
+
+
+                # Небольшой отступ
+                Widget:
+                    size_hint_y: None
+                    height: "10dp"
+
+            # ── Настройки сервера ──
+            MDBoxLayout:
+                size_hint_y: None
+                height: SIZE_ROW
+                spacing: SPACE_SM
+
+                MDTextField:
+                    id: login_server_url
+                    hint_text: "Адрес сервера (IP или домен)"
+                    input_type: "text"
+                    mode: "rectangle"
+                    size_hint_y: None
+                    height: "48dp"
+                    pos_hint: { "center_y": .5 }
+
+                RoundedButton:
+                    text: "💾"
+                    background_color: COLOR_PRIMARY
+                    color: COLOR_ON_DARK
+                    size_hint_x: None
+                    width: "60dp"
+                    height: "48dp"
+                    pos_hint: { "center_y": .5 }
+                    on_release: root.save_server_from_login()
 
             MDTextField:
                 id: first_name

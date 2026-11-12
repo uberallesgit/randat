@@ -10,23 +10,43 @@
 """
 import os
 import requests
+import json
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from paths import service_path
+
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # ────────────────────────────────────────────────────────────────
 # КОНФИГУРАЦИЯ
 # ────────────────────────────────────────────────────────────────
-# Пока нет домена — используем IP WSL.
-# Когда купишь домен и настроишь HTTPS — поменяешь на:
-#   API_URL = "https://api.tvoyproekt.ru"
-API_URL = "https://api.ubergoober.site:8443"      # ← ЗАМЕНИ на свой IP (hostname -I)
+
+
+
 API_PREFIX = "/api/v1"
 
 # Таймауты (секунды)
 CONNECT_TIMEOUT = 5
 READ_TIMEOUT = 15
+
+
+
+def _get_base_url():
+    # Код почти такой же, как в main.py, чтобы избежать циклического импорта
+    path = service_path("server_config.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                url = json.load(f).get("server_url", "").strip()
+                if url:
+                    return url
+        except Exception:
+            pass
+    return "https://api.ubergoober.site:8443"
+
+# Замените все использования BASE_URL на функцию _get_base_url()
 
 
 class ApiClient:
@@ -110,8 +130,9 @@ class ApiClient:
         path — например "/auth/me" (без префикса /api/v1).
         Возвращает requests.Response.
         """
-        url = API_URL + API_PREFIX + path
+        url = _get_base_url() + API_PREFIX + path
         kwargs.setdefault('timeout', (CONNECT_TIMEOUT, READ_TIMEOUT))
+        kwargs.setdefault('verify', False)  # ← НОВОЕ
         try:
             return self.s.get(url, headers=self._headers(), **kwargs)
         except requests.exceptions.RequestException as e:
@@ -123,8 +144,9 @@ class ApiClient:
         POST-запрос к API.
         Возвращает requests.Response.
         """
-        url = API_URL + API_PREFIX + path
+        url = _get_base_url() + API_PREFIX + path
         kwargs.setdefault('timeout', (CONNECT_TIMEOUT, READ_TIMEOUT))
+        kwargs.setdefault('verify', False)  # ← НОВОЕ
         try:
             return self.s.post(url, headers=self._headers(),
                                json=json, **kwargs)
@@ -134,7 +156,7 @@ class ApiClient:
 
     def ws_url(self, path):
         """URL для WebSocket. Например ws_url('/chat/ws')."""
-        base = API_URL.replace("https://", "wss://").replace("http://", "ws://")
+        base = _get_base_url().replace("https://", "wss://").replace("http://", "ws://")
         return f"{base}{API_PREFIX}{path}?token={self.token}"
 
     # ────────────────────────────────────────────────────────────
