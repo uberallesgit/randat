@@ -36,9 +36,17 @@ jobs:
           rm -rf .buildozer
           rm -rf ~/.buildozer
 
-      - name: Build APK
+      - name: Build APK with Buildozer
         run: |
-          yes | buildozer -v android debug
+          buildozer -v android debug 2>&1 | tee buildozer_full.log
+        continue-on-error: true  # Чтобы workflow не остановился и вы смогли скачать лог
+
+      - name: Upload Build Log
+        if: always() # Скачиваем лог даже если сборка упала
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-log
+          path: buildozer_full.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
