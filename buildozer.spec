@@ -31,6 +31,7 @@ android.minapi = 21
 android.ndk = 25b
 android.archs = arm64-v8a
 android.enable_androidx = True
+log_level = 0
 
 [buildozer]
 log_level = 2
