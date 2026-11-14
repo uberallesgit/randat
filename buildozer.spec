@@ -21,7 +21,7 @@ android.keyalias = myalias
 android.keyalias_passwd = Reremedy12!@
 
 # Требования зафиксированы правильно
-requirements = python3, cython==0.29.36, kivy==2.3.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
+requirements = python3, cython==0.29.36, kivy==2.2.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
 p4a.branch = develop
 orientation = portrait
 fullscreen = 0
