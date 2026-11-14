@@ -22,6 +22,7 @@ android.keyalias_passwd = Reremedy12!@
 
 # Требования зафиксированы правильно
 requirements = python3, cython==0.29.36, kivy==https://github.com/kivy/kivy/archive/refs/tags/2.3.1.zip, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
+p4a.branch = develop
 orientation = portrait
 fullscreen = 0
 # (bool) Automatically accept the Android SDK licenses
