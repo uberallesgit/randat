@@ -21,7 +21,7 @@ android.keyalias = myalias
 android.keyalias_passwd = Reremedy12!@
 
 # Требования зафиксированы правильно
-requirements = python3, cython==0.29.36, kivy==git+https://github.com/kivy/kivy.git@2.3.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
+requirements = python3, cython==0.29.36, kivy==https://github.com/kivy/kivy/archive/refs/tags/2.3.1.zip, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
 p4a.branch = develop
 orientation = portrait
 fullscreen = 0
@@ -29,8 +29,7 @@ fullscreen = 0
 android.accept_sdk_license = True
 
 # Исправленные разрешения для API 33
-android.permissions = INTERNET, ACCESS_NETWORK_STATE, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO
-
+ndroid.permissions = INTERNET, ACCESS_NETWORK_STATE, READ_EXTERNAL_STORAGE, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
