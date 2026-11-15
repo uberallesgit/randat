@@ -60,6 +60,8 @@ from kivy.metrics import dp
 from datetime import datetime, date
 import calendar
 from kivy.utils import platform as kivy_platform  # Вызывает родной Android filechooser
+from kivy.utils import platform as kivy_platform
+
 
 # ────────────────────────────────────────────────────────────────
 # НАСТРОЙКИ СЕРВЕРА (IP / Домен)
@@ -4512,7 +4514,11 @@ def open_file_chooser(on_select, ext=None, start_path=None):
         except Exception as e:
             print(f"[Chooser] ошибка создания: {e}")
             show_simple_dialog("Ошибка", f"Не удалось открыть файловый менеджер:\n{e}")
+<<<<<<< HEAD
         return
+=======
+        return 
+>>>>>>> b3941e096d2cfeb8ca512d2ee5508cb3e3f0d2e9
 
     # ─── Windows / Linux: FileChooserListView в Popup ───
     if not start_path:
