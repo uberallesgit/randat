@@ -59,6 +59,7 @@ from kivymd.uix.label import MDLabel
 from kivy.metrics import dp
 from datetime import datetime, date
 import calendar
+from kivy.utils import platform as kivy_platform  # Вызывает родной Android filechooser
 
 # ────────────────────────────────────────────────────────────────
 # НАСТРОЙКИ СЕРВЕРА (IP / Домен)
@@ -4474,11 +4475,12 @@ def build_upcoming_birthdays_text(days=7):
 
 
 def open_file_chooser(on_select, ext=None, start_path=None):
-    import platform, os
+    print(f"[chooser] kivy_platform = {kivy_platform}")  # отладка
 
-    if platform.system() == 'Android':
+    if kivy_platform == 'android':
+        print("[chooser] entering Android branch")
         from androidstorage4kivy import Chooser, SharedStorage
-        from kivy.app import App        # ← добавить
+        from kivy.app import App
 
         def chooser_callback(shared_file_list):
             print(f"[Chooser] callback, files={shared_file_list}")
@@ -4489,18 +4491,15 @@ def open_file_chooser(on_select, ext=None, start_path=None):
                 private_file_path = ss.copy_from_shared(shared_file_list[0])
                 print(f"[Chooser] copied to {private_file_path}")
                 if private_file_path:
-                    # ⚠️ ВАЖНО: переключаемся в главный поток Kivy —
-                    # только там можно создавать Popup/виджеты.
+                    Clock.schedule_once(lambda dt: on_select(private_file_path), 0)
+                else:
                     Clock.schedule_once(
-                        lambda dt: on_select(private_file_path), 0
+                        lambda dt: show_simple_dialog("Ошибка", "Не удалось скопировать файл"), 0
                     )
             except Exception as e:
                 print(f"[Chooser] callback error: {e}")
-                # и ошибку показываем тоже из главного потока
                 Clock.schedule_once(
-                    lambda dt: show_simple_dialog(
-                        "Ошибка", f"Не удалось открыть файл:\n{e}"
-                    ), 0
+                    lambda dt: show_simple_dialog("Ошибка", f"Не удалось открыть файл:\n{e}"), 0
                 )
 
         try:
@@ -4514,7 +4513,6 @@ def open_file_chooser(on_select, ext=None, start_path=None):
             print(f"[Chooser] ошибка создания: {e}")
             show_simple_dialog("Ошибка", f"Не удалось открыть файловый менеджер:\n{e}")
         return
-    ...
 
     # ─── Windows / Linux: FileChooserListView в Popup ───
     if not start_path:
