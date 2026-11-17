@@ -20,9 +20,7 @@ android.keyalias = myalias
 android.keyalias_passwd = Reremedy12!@
 
 # Требования зафиксированы правильно
-<<<<<<< HEAD
 requirements = python3, cython==3.0.11, kivy==git+https://github.com/kivy/kivy.git@2.3.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
-=======
 requirements = python3==3.11.9, hostpython3==3.11.9, cython==0.29.36, kivy==2.2.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
 #p4a.branch = develop
 orientation = portrait
