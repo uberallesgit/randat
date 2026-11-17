@@ -25,7 +25,6 @@ requirements = python3, cython==3.0.11, kivy==git+https://github.com/kivy/kivy.g
 =======
 requirements = python3==3.11.9, hostpython3==3.11.9, cython==0.29.36, kivy==2.2.1, kivymd==1.1.1, pillow, openpyxl, et-xmlfile, xlrd, androidstorage4kivy
 #p4a.branch = develop
->>>>>>> b3941e096d2cfeb8ca512d2ee5508cb3e3f0d2e9
 orientation = portrait
 fullscreen = 0
 # (bool) Automatically accept the Android SDK licenses
